@@ -3,97 +3,17 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { connectRedis, getClient } = require('./redisClient');
-
-const app = express();
 const projectManager = require('./projectManager');
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));
 
 // Initialize Redis connection
 let redisClient;
-// Add this in your startServer function after redisClient is connected:
-projectManager.init();
 
-// Save file endpoint
-app.post('/api/files', async (req, res) => {
-    try {
-        const { filename, content } = req.body;
-        
-        if (!filename || content === undefined) {
-            return res.status(400).json({ error: 'Filename and content are required' });
-        }
-
-        const key = `file:${filename}`;
-        
-        // Store file with metadata
-        await redisClient.hSet(key, {
-            content: content,
-            updatedAt: new Date().toISOString(),
-            size: Buffer.byteLength(content, 'utf8')
-        });
-
-        res.json({ 
-            success: true, 
-            message: `File ${filename} saved successfully`,
-            key: key 
-        });
-    } catch (error) {
-        console.error('Error saving file:', error);
-        res.status(500).json({ error: 'Failed to save file' });
-    }
-});
-
-// Get file endpoint
-app.get('/api/files/:filename', async (req, res) => {
-    try {
-        const { filename } = req.params;
-        const key = `file:${filename}`;
-        
-        const fileData = await redisClient.hGetAll(key);
-        
-        if (!fileData || !fileData.content) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-
-        res.json({
-            filename,
-            content: fileData.content,
-            updatedAt: fileData.updatedAt,
-            size: parseInt(fileData.size) || 0
-        });
-    } catch (error) {
-        console.error('Error retrieving file:', error);
-        res.status(500).json({ error: 'Failed to retrieve file' });
-    }
-});
-
-// List all files endpoint (bonus!)
-app.get('/api/files', async (req, res) => {
-    try {
-        const keys = await redisClient.keys('file:*');
-        const files = [];
-
-        for (const key of keys) {
-            const filename = key.replace('file:', '');
-            const metadata = await redisClient.hGet(key, 'updatedAt');
-            files.push({
-                filename,
-                key,
-                updatedAt: metadata
-            });
-        }
-
-        res.json({ files });
-    } catch (error) {
-        console.error('Error listing files:', error);
-        res.status(500).json({ error: 'Failed to list files' });
-    }
-});
-
-
-
+// Project endpoints
 // Create new project
 app.post('/api/projects', async (req, res) => {
     try {
@@ -157,11 +77,10 @@ app.post('/api/projects/:projectId/files', async (req, res) => {
     }
 });
 
-// Get file from project
-app.get('/api/projects/:projectId/files/*', async (req, res) => {
+// Get file from project - Fixed the route pattern
+app.get('/api/projects/:projectId/files/:filepath(*)', async (req, res) => {
     try {
-        const { projectId } = req.params;
-        const filepath = req.params[0]; // Everything after /files/
+        const { projectId, filepath } = req.params;
         
         const file = await projectManager.getFile(projectId, filepath);
         
@@ -181,11 +100,10 @@ app.get('/api/projects/:projectId/files/*', async (req, res) => {
     }
 });
 
-// Update file in project
-app.put('/api/projects/:projectId/files/*', async (req, res) => {
+// Update file in project - Fixed the route pattern
+app.put('/api/projects/:projectId/files/:filepath(*)', async (req, res) => {
     try {
-        const { projectId } = req.params;
-        const filepath = req.params[0];
+        const { projectId, filepath } = req.params;
         const { content } = req.body;
         
         if (content === undefined) {
@@ -197,6 +115,19 @@ app.put('/api/projects/:projectId/files/*', async (req, res) => {
     } catch (error) {
         console.error('Error updating file:', error);
         res.status(500).json({ error: 'Failed to update file' });
+    }
+});
+
+// Delete file from project - Fixed the route pattern
+app.delete('/api/projects/:projectId/files/:filepath(*)', async (req, res) => {
+    try {
+        const { projectId, filepath } = req.params;
+        
+        const result = await projectManager.deleteFile(projectId, filepath);
+        res.json(result);
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        res.status(500).json({ error: 'Failed to delete file' });
     }
 });
 
@@ -242,10 +173,89 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     }
 });
 
+// Save file endpoint (from checkpoint 1)
+app.post('/api/files', async (req, res) => {
+    try {
+        const { filename, content } = req.body;
+        
+        if (!filename || content === undefined) {
+            return res.status(400).json({ error: 'Filename and content are required' });
+        }
+
+        const key = `file:${filename}`;
+        
+        await redisClient.hSet(key, {
+            content: content,
+            updatedAt: new Date().toISOString(),
+            size: Buffer.byteLength(content, 'utf8')
+        });
+
+        res.json({ 
+            success: true, 
+            message: `File ${filename} saved successfully`,
+            key: key 
+        });
+    } catch (error) {
+        console.error('Error saving file:', error);
+        res.status(500).json({ error: 'Failed to save file' });
+    }
+});
+
+// Get file endpoint (from checkpoint 1)
+app.get('/api/files/:filename', async (req, res) => {
+    try {
+        const { filename } = req.params;
+        const key = `file:${filename}`;
+        
+        const fileData = await redisClient.hGetAll(key);
+        
+        if (!fileData || !fileData.content) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        res.json({
+            filename,
+            content: fileData.content,
+            updatedAt: fileData.updatedAt,
+            size: parseInt(fileData.size) || 0
+        });
+    } catch (error) {
+        console.error('Error retrieving file:', error);
+        res.status(500).json({ error: 'Failed to retrieve file' });
+    }
+});
+
+// List all files endpoint (from checkpoint 1)
+app.get('/api/files', async (req, res) => {
+    try {
+        const keys = await redisClient.keys('file:*');
+        const files = [];
+
+        for (const key of keys) {
+            const filename = key.replace('file:', '');
+            const metadata = await redisClient.hGet(key, 'updatedAt');
+            files.push({
+                filename,
+                key,
+                updatedAt: metadata
+            });
+        }
+
+        res.json({ files });
+    } catch (error) {
+        console.error('Error listing files:', error);
+        res.status(500).json({ error: 'Failed to list files' });
+    }
+});
+
 // Start server
 async function startServer() {
     try {
+        // Connect to Redis first
         redisClient = await connectRedis();
+        
+        // Initialize project manager with the Redis client
+        projectManager.init();
         
         app.listen(process.env.PORT || 3000, () => {
             console.log(`Server running on port ${process.env.PORT || 3000}`);

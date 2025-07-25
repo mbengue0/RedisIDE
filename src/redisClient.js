@@ -26,6 +26,16 @@ async function connectRedis() {
     });
 
     await client.connect();
+    
+    // Check for RedisJSON support
+    try {
+        await client.sendCommand(['JSON.SET', 'test:json', '$', '{}']);
+        await client.del('test:json');
+        console.log('✅ RedisJSON is available');
+    } catch (error) {
+        console.log('⚠️  RedisJSON not available - using fallback storage');
+    }
+    
     return client;
 }
 

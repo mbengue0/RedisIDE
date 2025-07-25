@@ -26,8 +26,14 @@ class ProjectManager {
             }
         };
 
-        // Store project metadata using JSON
-        await this.client.json.set(`project:${projectId}`, '$', project);
+        try {
+            // Try to use JSON.SET command directly
+            await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+        } catch (error) {
+            // Fallback: Store as a regular string if RedisJSON is not available
+            console.log('RedisJSON not available, using string storage');
+            await this.client.set(`project:${projectId}`, JSON.stringify(project));
+        }
         
         // Add to projects list
         await this.client.sAdd('projects:list', projectId);
@@ -42,7 +48,7 @@ class ProjectManager {
 
         for (const id of projectIds) {
             try {
-                const project = await this.client.json.get(`project:${id}`);
+                const project = await this.getProject(id);
                 if (project) {
                     projects.push(project);
                 }
@@ -58,7 +64,15 @@ class ProjectManager {
 
     // Get project by ID
     async getProject(projectId) {
-        return await this.client.json.get(`project:${projectId}`);
+        try {
+            // Try RedisJSON first
+            const result = await this.client.sendCommand(['JSON.GET', `project:${projectId}`]);
+            return JSON.parse(result);
+        } catch (error) {
+            // Fallback to string storage
+            const projectStr = await this.client.get(`project:${projectId}`);
+            return projectStr ? JSON.parse(projectStr) : null;
+        }
     }
 
     // Add file to project
@@ -78,30 +92,51 @@ class ProjectManager {
         });
 
         // Update project structure
-        const jsonPath = this.buildJsonPath(pathParts, filename);
-        await this.client.json.set(
-            `project:${projectId}`, 
-            jsonPath,
-            {
-                type: 'file',
-                name: filename,
-                path: filepath,
-                size: Buffer.byteLength(content, 'utf8'),
-                updatedAt: new Date().toISOString()
+        try {
+            // Get current project
+            const project = await this.getProject(projectId);
+            if (!project) {
+                throw new Error('Project not found');
             }
-        );
 
-        // Update project's updatedAt
-        await this.client.json.set(
-            `project:${projectId}`,
-            '$.updatedAt',
-            new Date().toISOString()
-        );
+            // Update files structure
+            let current = project.files;
+            pathParts.forEach((part, index) => {
+                if (index === pathParts.length - 1) {
+                    // Last part - create file
+                    current[filename] = {
+                        type: 'file',
+                        name: filename,
+                        path: filepath,
+                        size: Buffer.byteLength(content, 'utf8'),
+                        updatedAt: new Date().toISOString()
+                    };
+                } else {
+                    // Create folder if it doesn't exist
+                    if (!current[part]) {
+                        current[part] = { type: 'folder', children: {} };
+                    }
+                    current = current[part].children || current[part];
+                }
+            });
+
+            // Update project
+            project.updatedAt = new Date().toISOString();
+            
+            // Save updated project
+            try {
+                await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+            } catch (error) {
+                await this.client.set(`project:${projectId}`, JSON.stringify(project));
+            }
+        } catch (error) {
+            console.error('Error updating project structure:', error);
+        }
 
         return { success: true, filepath, fileKey };
     }
 
-    // Build JSON path for nested file structure
+    // Build JSON path for nested file structure (for RedisJSON)
     buildJsonPath(folders, filename) {
         let path = '$.files';
         for (const folder of folders) {
@@ -113,48 +148,39 @@ class ProjectManager {
 
     // Create folder in project
     async createFolder(projectId, folderPath) {
-        const pathParts = folderPath.split('/').filter(p => p);
-        let currentPath = '$.files';
-        
-        for (const folder of pathParts) {
-            const nextPath = currentPath + `["${folder}"]`;
+        try {
+            const project = await this.getProject(projectId);
+            if (!project) {
+                throw new Error('Project not found');
+            }
+
+            const pathParts = folderPath.split('/').filter(p => p);
+            let current = project.files;
             
-            // Check if folder exists
-            try {
-                const exists = await this.client.json.get(
-                    `project:${projectId}`,
-                    nextPath
-                );
-                
-                if (!exists) {
-                    // Create folder
-                    await this.client.json.set(
-                        `project:${projectId}`,
-                        nextPath,
-                        {
-                            type: 'folder',
-                            name: folder,
-                            children: {}
-                        }
-                    );
-                }
-            } catch (error) {
-                // Folder doesn't exist, create it
-                await this.client.json.set(
-                    `project:${projectId}`,
-                    nextPath,
-                    {
+            pathParts.forEach((folder) => {
+                if (!current[folder]) {
+                    current[folder] = {
                         type: 'folder',
                         name: folder,
                         children: {}
-                    }
-                );
-            }
-            
-            currentPath = nextPath;
-        }
+                    };
+                }
+                current = current[folder].children || {};
+            });
 
-        return { success: true, folderPath };
+            project.updatedAt = new Date().toISOString();
+            
+            try {
+                await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+            } catch (error) {
+                await this.client.set(`project:${projectId}`, JSON.stringify(project));
+            }
+
+            return { success: true, folderPath };
+        } catch (error) {
+            console.error('Error creating folder:', error);
+            throw error;
+        }
     }
 
     // Get file from project
@@ -174,11 +200,19 @@ class ProjectManager {
         });
 
         // Update project's updatedAt
-        await this.client.json.set(
-            `project:${projectId}`,
-            '$.updatedAt',
-            new Date().toISOString()
-        );
+        try {
+            const project = await this.getProject(projectId);
+            if (project) {
+                project.updatedAt = new Date().toISOString();
+                try {
+                    await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+                } catch (error) {
+                    await this.client.set(`project:${projectId}`, JSON.stringify(project));
+                }
+            }
+        } catch (error) {
+            console.error('Error updating project timestamp:', error);
+        }
 
         return { success: true, filepath };
     }
@@ -208,12 +242,29 @@ class ProjectManager {
         await this.client.del(fileKey);
 
         // Remove from project structure
-        const pathParts = filepath.split('/');
-        const filename = pathParts.pop();
-        const jsonPath = this.buildJsonPath(pathParts, filename);
-        
         try {
-            await this.client.json.del(`project:${projectId}`, jsonPath);
+            const project = await this.getProject(projectId);
+            if (project) {
+                const pathParts = filepath.split('/');
+                const filename = pathParts.pop();
+                
+                let current = project.files;
+                for (let i = 0; i < pathParts.length; i++) {
+                    if (current[pathParts[i]]) {
+                        current = current[pathParts[i]].children || current[pathParts[i]];
+                    }
+                }
+                
+                delete current[filename];
+                
+                project.updatedAt = new Date().toISOString();
+                
+                try {
+                    await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+                } catch (error) {
+                    await this.client.set(`project:${projectId}`, JSON.stringify(project));
+                }
+            }
         } catch (error) {
             console.error('Error removing file from project structure:', error);
         }
@@ -230,7 +281,7 @@ class ProjectManager {
         }
 
         // Delete project metadata
-        await this.client.json.del(`project:${projectId}`);
+        await this.client.del(`project:${projectId}`);
         
         // Remove from projects list
         await this.client.sRem('projects:list', projectId);
