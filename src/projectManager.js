@@ -75,10 +75,10 @@ class ProjectManager {
         }
     }
 
-    // Add file to project
+    // Update the addFileToProject method in src/projectManager.js
     async addFileToProject(projectId, filepath, content = '') {
-        const pathParts = filepath.split('/');
-        const filename = pathParts.pop();
+        const pathParts = filepath.split('/').filter(p => p); // Remove empty parts
+        const filename = pathParts.pop(); // Get the filename
         
         // Store file content
         const fileKey = `file:${projectId}:${filepath}`;
@@ -99,26 +99,37 @@ class ProjectManager {
                 throw new Error('Project not found');
             }
 
-            // Update files structure
+            // Navigate/create the folder structure
             let current = project.files;
-            pathParts.forEach((part, index) => {
-                if (index === pathParts.length - 1) {
-                    // Last part - create file
-                    current[filename] = {
-                        type: 'file',
-                        name: filename,
-                        path: filepath,
-                        size: Buffer.byteLength(content, 'utf8'),
-                        updatedAt: new Date().toISOString()
+            
+            // Create all folders in the path
+            for (let i = 0; i < pathParts.length; i++) {
+                const folderName = pathParts[i];
+                
+                // If folder doesn't exist, create it
+                if (!current[folderName]) {
+                    current[folderName] = {
+                        type: 'folder',
+                        name: folderName,
+                        children: {}
                     };
-                } else {
-                    // Create folder if it doesn't exist
-                    if (!current[part]) {
-                        current[part] = { type: 'folder', children: {} };
-                    }
-                    current = current[part].children || current[part];
                 }
-            });
+                
+                // Navigate into the folder
+                if (!current[folderName].children) {
+                    current[folderName].children = {};
+                }
+                current = current[folderName].children;
+            }
+            
+            // Add the file to the final folder
+            current[filename] = {
+                type: 'file',
+                name: filename,
+                path: filepath,
+                size: Buffer.byteLength(content, 'utf8'),
+                updatedAt: new Date().toISOString()
+            };
 
             // Update project
             project.updatedAt = new Date().toISOString();
@@ -131,6 +142,7 @@ class ProjectManager {
             }
         } catch (error) {
             console.error('Error updating project structure:', error);
+            throw error;
         }
 
         return { success: true, filepath, fileKey };
