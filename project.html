@@ -267,6 +267,88 @@
         .tree-item.nested {
             margin-left: 20px;
         }
+
+        .tree-item.folder {
+            cursor: pointer;
+        }
+
+        .tree-item.folder:hover {
+            background-color: #37373d;
+        }
+
+        .tree-item.folder.selected {
+            background-color: #2a2a2a;
+            border-left: 3px solid #007acc;
+        }
+
+        /* Show a hint when folder is selected */
+        .tree-controls::before {
+            content: attr(data-hint);
+            display: block;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+
+        /* Add these styles to the <style> section */
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .folder-arrow {
+            width: 12px;
+            font-size: 10px;
+            color: #cccccc;
+            cursor: pointer;
+            user-select: none;
+            display: inline-block;
+        }
+
+        .folder-arrow:hover {
+            color: #ffffff;
+        }
+
+        .tree-item.folder {
+            cursor: pointer;
+        }
+
+        .tree-item.folder:hover {
+            background-color: #2a2a2a;
+        }
+
+        .tree-item.folder.selected {
+            background-color: #37373d;
+        }
+
+        .tree-item.file {
+            cursor: pointer;
+        }
+
+        .tree-item.file:hover {
+            background-color: #2a2a2a;
+        }
+
+        .tree-item.file.selected {
+            background-color: #094771;
+        }
+
+        /* Update the tree controls hint */
+        .tree-controls {
+            position: relative;
+        }
+
+        .tree-controls::before {
+            content: attr(data-hint);
+            display: block;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            height: 20px;
+        }
     </style>
 </head>
 <body>
@@ -286,7 +368,8 @@
                 </div>
             </div>
             
-            <div class="tree-controls">
+            // Update this part of the HTML
+            <div class="tree-controls" id="treeControls">
                 <button onclick="showNewFileModal()">📄 New File</button>
                 <button onclick="showNewFolderModal()">📁 New Folder</button>
             </div>
@@ -350,12 +433,32 @@
         let openFiles = new Map(); // filepath -> content
         let currentFile = null;
         let isDirty = false;
+        let currentFolder = null; // Track which folder is selected
+        let expandedFolders = new Set(); // Track which folders are expanded
 
         // Initialize
+        // Replace the window.onload section
         window.onload = async () => {
+            // Initialize expanded folders set
+            if (!expandedFolders) {
+                expandedFolders = new Set();
+            }
+            
             await loadProjects();
-            setupEditor();
+            updateTreeControlsHint();
         };
+
+        // Make sure this function exists
+        function updateTreeControlsHint() {
+            const controls = document.getElementById('treeControls');
+            if (controls) {
+                if (currentFolder) {
+                    controls.setAttribute('data-hint', `📁 ${currentFolder}`);
+                } else {
+                    controls.setAttribute('data-hint', '📁 root');
+                }
+            }
+        }
 
         // Setup editor
         function setupEditor() {
@@ -375,6 +478,33 @@
                 }
             });
             
+            // Add this JavaScript to update the hint
+            function updateTreeControlsHint() {
+                const controls = document.getElementById('treeControls');
+                if (currentFolder) {
+                    controls.setAttribute('data-hint', `Creating in: ${currentFolder}/`);
+                } else {
+                    controls.setAttribute('data-hint', 'Creating in: root');
+                }
+            }
+
+            // Call this in selectFolder function
+            // Update the selectFolder function
+            function selectFolder(folderPath, event) {
+                if (event) {
+                    event.stopPropagation();
+                }
+                currentFolder = folderPath;
+                updateTreeControlsHint();
+                updateStatus(`Selected folder: ${folderPath}`);
+                
+                // Highlight the selected folder without reloading the tree
+                document.querySelectorAll('.tree-item.folder').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                event.currentTarget.classList.add('selected');
+            }
+
             // Update cursor position
             editor.addEventListener('selectionchange', () => {
                 const lines = editor.value.substring(0, editor.selectionStart).split('\n');
@@ -411,13 +541,29 @@
             }
         }
 
-        // Load project
+        // Update the loadProject function to auto-expand root folders
         async function loadProject(projectId) {
             try {
+                // Clear state when switching projects
+                openFiles.clear();
+                currentFile = null;
+                currentFolder = null;
+                expandedFolders.clear();
+                
                 const response = await fetch(`${API_URL}/projects/${projectId}`);
                 const data = await response.json();
                 
                 currentProject = data.project;
+                
+                // Auto-expand root level folders
+                if (currentProject.files) {
+                    Object.keys(currentProject.files).forEach(key => {
+                        if (currentProject.files[key].type === 'folder' || currentProject.files[key].children) {
+                            expandedFolders.add(key);
+                        }
+                    });
+                }
+                
                 await loadProjectFiles();
                 updateStatus(`Loaded project: ${currentProject.name}`);
             } catch (error) {
@@ -431,10 +577,27 @@
             if (!currentProject) return;
             
             try {
-                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
-                const data = await response.json();
+                // Get the complete project data including folder structure
+                const projectResponse = await fetch(`${API_URL}/projects/${currentProject.id}`);
+                const projectData = await projectResponse.json();
                 
-                renderFileTree(data.files);
+                // Get the list of files
+                const filesResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                const filesData = await filesResponse.json();
+                
+                // Render the project structure
+                const fileTree = document.getElementById('fileTree');
+                
+                if (projectData.project && projectData.project.files) {
+                    // Use the project's file structure (includes empty folders)
+                    const treeHtml = renderTreeNodes(projectData.project.files, 0);
+                    fileTree.innerHTML = treeHtml || '<div style="padding: 20px; text-align: center; color: #888;">Empty project. Create files or folders!</div>';
+                } else if (filesData.files.length > 0) {
+                    // Fallback to building tree from files
+                    renderFileTree(filesData.files);
+                } else {
+                    fileTree.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files yet. Create your first file!</div>';
+                }
             } catch (error) {
                 console.error('Error loading project files:', error);
             }
@@ -492,20 +655,16 @@
                 console.error('Error loading project structure:', error);
             }
         }
-        // Update the renderTreeNodes function in project.html
-        function renderTreeNodes(nodes, level) {
+
+        // Update the renderTreeNodes function to make folders clickable
+        function renderTreeNodes(nodes, level, parentPath = '') {
             let html = '';
             
-            // Handle empty object
             if (!nodes || Object.keys(nodes).length === 0) {
-                if (level === 0) {
-                    return '<div style="padding: 20px; text-align: center; color: #888;">Empty project. Create files or folders!</div>';
-                }
                 return '';
             }
             
             Object.entries(nodes).sort(([a, nodeA], [b, nodeB]) => {
-                // Folders first, then files
                 const aIsFolder = nodeA.type === 'folder' || nodeA.children !== undefined;
                 const bIsFolder = nodeB.type === 'folder' || nodeB.children !== undefined;
                 if (aIsFolder && !bIsFolder) return -1;
@@ -513,24 +672,37 @@
                 return a.localeCompare(b);
             }).forEach(([name, node]) => {
                 const indent = level * 20;
+                const currentPath = parentPath ? `${parentPath}/${name}` : name;
                 
                 if (node.type === 'folder' || node.children !== undefined) {
+                    const hasChildren = node.children && Object.keys(node.children).length > 0;
+                    const isExpanded = expandedFolders.has(currentPath);
+                    const isSelected = currentFolder === currentPath ? 'selected' : '';
+                    
                     html += `
-                        <div class="tree-item folder" style="padding-left: ${indent}px">
+                        <div class="tree-item folder ${isSelected}" 
+                            style="padding-left: ${indent}px"
+                            onclick="selectFolder('${currentPath}', event)"
+                            ondblclick="toggleFolder('${currentPath}', event)">
+                            <span class="folder-arrow" onclick="toggleFolder('${currentPath}', event)">
+                                ${hasChildren ? (isExpanded ? '▼' : '▶') : ''}
+                            </span>
                             <span class="icon">📁</span>
                             <span>${name}</span>
                         </div>
                     `;
-                    // Recursively render children
-                    if (node.children) {
-                        const childrenHtml = renderTreeNodes(node.children, level + 1);
-                        html += childrenHtml || `<div style="padding-left: ${(level + 1) * 20}px; color: #666; font-style: italic;">Empty folder</div>`;
+                    // Recursively render children only if expanded
+                    if (hasChildren && isExpanded) {
+                        html += renderTreeNodes(node.children, level + 1, currentPath);
                     }
                 } else {
                     const icon = getFileIcon(name);
-                    const filePath = node.path || name;
+                    const filePath = node.path || currentPath;
+                    const isActive = filePath === currentFile ? 'selected' : '';
                     html += `
-                        <div class="tree-item file" style="padding-left: ${indent}px" onclick="openFile('${filePath}')">
+                        <div class="tree-item file ${isActive}" 
+                            style="padding-left: ${indent + 20}px" 
+                            onclick="openFile('${filePath}')">
                             <span class="icon">${icon}</span>
                             <span>${name}</span>
                         </div>
@@ -539,6 +711,26 @@
             });
             
             return html;
+        }
+
+        // Add toggle folder function
+        function toggleFolder(folderPath, event) {
+            event.stopPropagation();
+            
+            if (expandedFolders.has(folderPath)) {
+                expandedFolders.delete(folderPath);
+            } else {
+                expandedFolders.add(folderPath);
+            }
+            
+            loadProjectFiles();
+        }
+
+        // Add function to select a folder
+        function selectFolder(folderPath) {
+            currentFolder = folderPath;
+            loadProjectFiles(); // Refresh to show selection
+            updateStatus(`Selected folder: ${folderPath}`);
         }
 
         // Get file icon based on extension
@@ -656,23 +848,49 @@
            document.getElementById('newProjectName').focus();
        }
 
-       function showNewFileModal() {
-           if (!currentProject) {
-               alert('Please select a project first');
-               return;
-           }
-           document.getElementById('newFileModal').style.display = 'block';
-           document.getElementById('newFilePath').focus();
-       }
+        // Update showNewFileModal to be simpler
+        function showNewFileModal() {
+            if (!currentProject) {
+                alert('Please select a project first');
+                return;
+            }
+            
+            const modal = document.getElementById('newFileModal');
+            const input = document.getElementById('newFilePath');
+            
+            // Just show filename input, not the full path
+            input.value = '';
+            if (currentFolder) {
+                input.placeholder = 'Enter filename (e.g., component.js)';
+            } else {
+                input.placeholder = 'Enter filename or path (e.g., index.js or src/index.js)';
+            }
+            
+            modal.style.display = 'block';
+            input.focus();
+        }
 
-       function showNewFolderModal() {
-           if (!currentProject) {
-               alert('Please select a project first');
-               return;
-           }
-           document.getElementById('newFolderModal').style.display = 'block';
-           document.getElementById('newFolderPath').focus();
-       }
+       // Update showNewFolderModal to work with current folder context
+        function showNewFolderModal() {
+            if (!currentProject) {
+                alert('Please select a project first');
+                return;
+            }
+            
+            const modal = document.getElementById('newFolderModal');
+            const input = document.getElementById('newFolderPath');
+            
+            // Similar to file creation - just show folder name
+            input.value = '';
+            if (currentFolder) {
+                input.placeholder = 'Enter folder name (e.g., components)';
+            } else {
+                input.placeholder = 'Enter folder name or path (e.g., src or src/components)';
+            }
+            
+            modal.style.display = 'block';
+            input.focus();
+        }
 
        function closeModal(modalId) {
            document.getElementById(modalId).style.display = 'none';
@@ -709,44 +927,97 @@
            }
        }
 
-       // Create file
-       async function createFile() {
-           const filepath = document.getElementById('newFilePath').value.trim();
-           
-           if (!filepath) {
-               alert('File path is required');
-               return;
-           }
-           
-           try {
-               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ 
-                       filepath, 
-                       content: `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n` 
-                   })
-               });
-               
-               if (response.ok) {
-                   closeModal('newFileModal');
-                   await loadProjectFiles();
-                   openFile(filepath);
-                   updateStatus(`Created file: ${filepath}`);
-               }
-           } catch (error) {
-               console.error('Error creating file:', error);
-               updateStatus('Error creating file', true);
-           }
-       }
+       // Add this function before the createFile function
+        function getLanguageMode(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const languages = {
+                'js': 'javascript',
+                'json': 'json',
+                'html': 'html',
+                'css': 'css',
+                'md': 'markdown',
+                'py': 'python',
+                'ts': 'typescript',
+                'tsx': 'typescript',
+                'jsx': 'javascript',
+                'java': 'java',
+                'go': 'go',
+                'rs': 'rust',
+                'php': 'php',
+                'rb': 'ruby',
+                'c': 'c',
+                'cpp': 'cpp',
+                'h': 'c',
+                'cs': 'csharp',
+                'swift': 'swift',
+                'kt': 'kotlin',
+                'sql': 'sql',
+                'sh': 'shell',
+                'yml': 'yaml',
+                'yaml': 'yaml',
+                'xml': 'xml'
+            };
+            return languages[ext] || 'plaintext';
+        }
 
-       // Create folder
+       // Update createFile to handle the folder context
+        async function createFile() {
+            let filepath = document.getElementById('newFilePath').value.trim();
+            
+            if (!filepath) {
+                alert('File name is required');
+                return;
+            }
+            
+            // If we have a current folder selected and the filepath doesn't contain /, prepend the folder
+            if (currentFolder && !filepath.includes('/')) {
+                filepath = currentFolder + '/' + filepath;
+            }
+            
+            try {
+                const language = getLanguageMode(filepath);
+                const templates = {
+                    'javascript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                    'typescript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                    'html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Document</title>\n</head>\n<body>\n    \n</body>\n</html>`,
+                    'css': `/* ${filepath} */\n/* Created on ${new Date().toLocaleString()} */\n\n`,
+                    'python': `# ${filepath}\n# Created on ${new Date().toLocaleString()}\n\n`,
+                    'json': '{\n  \n}',
+                    'markdown': `# ${filepath.split('/').pop().replace('.md', '')}\n\nCreated on ${new Date().toLocaleString()}\n\n`
+                };
+                
+                const content = templates[language] || `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`;
+                
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filepath, content })
+                });
+                
+                if (response.ok) {
+                    closeModal('newFileModal');
+                    await loadProjectFiles();
+                    openFile(filepath);
+                    updateStatus(`Created file: ${filepath}`);
+                }
+            } catch (error) {
+                console.error('Error creating file:', error);
+                updateStatus('Error creating file', true);
+            }
+        }
+
+       // Update createFolder to handle current folder context
         async function createFolder() {
-            const folderPath = document.getElementById('newFolderPath').value.trim();
+            let folderPath = document.getElementById('newFolderPath').value.trim();
             
             if (!folderPath) {
-                alert('Folder path is required');
+                alert('Folder name is required');
                 return;
+            }
+            
+            // If we have a current folder selected and the path doesn't contain /, prepend the folder
+            if (currentFolder && !folderPath.includes('/')) {
+                folderPath = currentFolder + '/' + folderPath;
             }
             
             console.log('Creating folder:', folderPath); // Debug log
@@ -758,13 +1029,15 @@
                     body: JSON.stringify({ folderPath })
                 });
                 
-                console.log('Response status:', response.status); // Debug log
                 const data = await response.json();
-                console.log('Response data:', data); // Debug log
                 
                 if (response.ok) {
                     closeModal('newFolderModal');
-                    await loadProjectFiles(); // Refresh the file tree
+                    
+                    // Add the new folder to expanded folders so it shows open
+                    expandedFolders.add(folderPath);
+                    
+                    await loadProjectFiles();
                     updateStatus(`Created folder: ${folderPath}`);
                 } else {
                     alert(`Error: ${data.error}`);
