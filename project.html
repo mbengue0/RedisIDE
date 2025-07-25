@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis IDE - Project View</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .ide-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .project-selector {
+            width: 100%;
+            padding: 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .new-project-btn {
+            width: 100%;
+            padding: 8px;
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .new-project-btn:hover {
+            background-color: #1177bb;
+        }
+        
+        /* File Tree */
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .tree-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 3px;
+            font-size: 13px;
+            user-select: none;
+        }
+        
+        .tree-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .tree-item.selected {
+            background-color: #094771;
+        }
+        
+        .tree-item.folder {
+            font-weight: 500;
+        }
+        
+        .tree-item .icon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+        
+        .tree-controls {
+            padding: 10px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .tree-controls button {
+            flex: 1;
+            padding: 6px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .tree-controls button:hover {
+            background-color: #484848;
+        }
+        
+        /* Editor Area */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-tabs {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            height: 35px;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 0 20px;
+            background-color: #2d2d30;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        
+        .tab:hover {
+            background-color: #353537;
+        }
+        
+        .tab.active {
+            background-color: #1e1e1e;
+        }
+        
+        .tab-close {
+            font-size: 16px;
+            color: #888;
+            cursor: pointer;
+        }
+        
+        .tab-close:hover {
+            color: #fff;
+        }
+        
+        .editor-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #editor {
+            width: 100%;
+            height: 100%;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            border: none;
+            padding: 10px;
+            resize: none;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            height: 22px;
+            background-color: #007acc;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+        
+        .status-message {
+            margin-right: auto;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            min-width: 400px;
+        }
+        
+        .modal-header {
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .modal input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .modal button {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .modal .primary {
+            background-color: #0e639c;
+            color: white;
+        }
+        
+        .modal .secondary {
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+        }
+        
+        /* File tree nested items */
+        .tree-item.nested {
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ide-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <select id="projectSelector" class="project-selector">
+                    <option value="">Select a project...</option>
+                </select>
+                <button class="new-project-btn" onclick="showNewProjectModal()">+ New Project</button>
+            </div>
+            
+            <div class="file-tree" id="fileTree">
+                <div style="padding: 20px; text-align: center; color: #888;">
+                    Select or create a project
+                </div>
+            </div>
+            
+            <div class="tree-controls">
+                <button onclick="showNewFileModal()">📄 New File</button>
+                <button onclick="showNewFolderModal()">📁 New Folder</button>
+            </div>
+        </div>
+        
+        <!-- Editor Area -->
+        <div class="editor-area">
+            <div class="editor-tabs" id="editorTabs">
+                <!-- Tabs will be added dynamically -->
+            </div>
+            
+            <div class="editor-container">
+                <textarea id="editor" placeholder="// Select a file to start editing..."></textarea>
+            </div>
+            
+            <div class="status-bar">
+                <span class="status-message" id="statusMessage">Ready</span>
+                <span id="cursorPosition">Ln 1, Col 1</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="newProjectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Project</div>
+            <input type="text" id="newProjectName" placeholder="Project name">
+            <input type="text" id="newProjectDescription" placeholder="Description (optional)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newProjectModal')">Cancel</button>
+                <button class="primary" onclick="createProject()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="newFileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New File</div>
+            <input type="text" id="newFilePath" placeholder="File path (e.g., src/index.js)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newFileModal')">Cancel</button>
+                <button class="primary" onclick="createFile()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="newFolderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Folder</div>
+            <input type="text" id="newFolderPath" placeholder="Folder path (e.g., src/components)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+                <button class="primary" onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let currentProject = null;
+        let openFiles = new Map(); // filepath -> content
+        let currentFile = null;
+        let isDirty = false;
+
+        // Initialize
+        window.onload = async () => {
+            await loadProjects();
+            setupEditor();
+        };
+
+        // Setup editor
+        function setupEditor() {
+            const editor = document.getElementById('editor');
+            
+            editor.addEventListener('input', () => {
+                if (currentFile) {
+                    isDirty = true;
+                    openFiles.set(currentFile, editor.value);
+                    updateStatus('Modified');
+                    
+                    // Auto-save after 1 second of inactivity
+                    clearTimeout(window.saveTimeout);
+                    window.saveTimeout = setTimeout(() => {
+                        saveCurrentFile();
+                    }, 1000);
+                }
+            });
+            
+            // Update cursor position
+            editor.addEventListener('selectionchange', () => {
+                const lines = editor.value.substring(0, editor.selectionStart).split('\n');
+                const line = lines.length;
+                const col = lines[lines.length - 1].length + 1;
+                document.getElementById('cursorPosition').textContent = `Ln ${line}, Col ${col}`;
+            });
+        }
+
+        // Load projects
+        async function loadProjects() {
+            try {
+                const response = await fetch(`${API_URL}/projects`);
+                const data = await response.json();
+                
+                const selector = document.getElementById('projectSelector');
+                selector.innerHTML = '<option value="">Select a project...</option>';
+                
+                data.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    selector.appendChild(option);
+                });
+                
+                selector.onchange = () => {
+                    if (selector.value) {
+                        loadProject(selector.value);
+                    }
+                };
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                updateStatus('Error loading projects', true);
+            }
+        }
+
+        // Load project
+        async function loadProject(projectId) {
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`);
+                const data = await response.json();
+                
+                currentProject = data.project;
+                await loadProjectFiles();
+                updateStatus(`Loaded project: ${currentProject.name}`);
+            } catch (error) {
+                console.error('Error loading project:', error);
+                updateStatus('Error loading project', true);
+            }
+        }
+
+        // Load project files
+        async function loadProjectFiles() {
+            if (!currentProject) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                const data = await response.json();
+                
+                renderFileTree(data.files);
+            } catch (error) {
+                console.error('Error loading project files:', error);
+            }
+        }
+
+       // Update in project.html
+        function renderFileTree(files) {
+            const fileTree = document.getElementById('fileTree');
+            
+            if (files.length === 0 && !currentProject) {
+                fileTree.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files yet. Create your first file!</div>';
+                return;
+            }
+            
+            // First, get the project structure to include empty folders
+            if (currentProject) {
+                // Build tree from project structure instead of just files
+                loadProjectStructure();
+            } else {
+                // Fallback to file-based tree
+                const tree = {};
+                files.forEach(file => {
+                    const parts = file.filepath.split('/');
+                    let current = tree;
+                    
+                    parts.forEach((part, index) => {
+                        if (index === parts.length - 1) {
+                            // It's a file
+                            current[part] = { type: 'file', path: file.filepath, size: file.size };
+                        } else {
+                            // It's a folder
+                            if (!current[part]) {
+                                current[part] = { type: 'folder', children: {} };
+                            }
+                            current = current[part].children;
+                        }
+                    });
+                });
+                
+                fileTree.innerHTML = renderTreeNodes(tree, 0);
+            }
+        }
+
+        // Add this new function to load the complete project structure
+        async function loadProjectStructure() {
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}`);
+                const data = await response.json();
+                
+                if (data.project && data.project.files) {
+                    const fileTree = document.getElementById('fileTree');
+                    fileTree.innerHTML = renderTreeNodes(data.project.files, 0);
+                }
+            } catch (error) {
+                console.error('Error loading project structure:', error);
+            }
+        }
+        // Update the renderTreeNodes function in project.html
+        function renderTreeNodes(nodes, level) {
+            let html = '';
+            
+            // Handle empty object
+            if (!nodes || Object.keys(nodes).length === 0) {
+                if (level === 0) {
+                    return '<div style="padding: 20px; text-align: center; color: #888;">Empty project. Create files or folders!</div>';
+                }
+                return '';
+            }
+            
+            Object.entries(nodes).sort(([a, nodeA], [b, nodeB]) => {
+                // Folders first, then files
+                const aIsFolder = nodeA.type === 'folder' || nodeA.children !== undefined;
+                const bIsFolder = nodeB.type === 'folder' || nodeB.children !== undefined;
+                if (aIsFolder && !bIsFolder) return -1;
+                if (!aIsFolder && bIsFolder) return 1;
+                return a.localeCompare(b);
+            }).forEach(([name, node]) => {
+                const indent = level * 20;
+                
+                if (node.type === 'folder' || node.children !== undefined) {
+                    html += `
+                        <div class="tree-item folder" style="padding-left: ${indent}px">
+                            <span class="icon">📁</span>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                    // Recursively render children
+                    if (node.children) {
+                        const childrenHtml = renderTreeNodes(node.children, level + 1);
+                        html += childrenHtml || `<div style="padding-left: ${(level + 1) * 20}px; color: #666; font-style: italic;">Empty folder</div>`;
+                    }
+                } else {
+                    const icon = getFileIcon(name);
+                    const filePath = node.path || name;
+                    html += `
+                        <div class="tree-item file" style="padding-left: ${indent}px" onclick="openFile('${filePath}')">
+                            <span class="icon">${icon}</span>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                }
+            });
+            
+            return html;
+        }
+
+        // Get file icon based on extension
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'js': '📄',
+                'json': '📋',
+                'html': '🌐',
+                'css': '🎨',
+                'md': '📝',
+                'txt': '📃',
+                'py': '🐍',
+                'ts': '📘',
+                'jsx': '⚛️',
+                'tsx': '⚛️'
+            };
+            return icons[ext] || '📄';
+        }
+
+        // Open file
+        async function openFile(filepath) {
+            if (!currentProject) return;
+            
+            // Save current file if dirty
+            if (isDirty && currentFile) {
+                await saveCurrentFile();
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${filepath}`);
+                const data = await response.json();
+                
+                currentFile = filepath;
+                openFiles.set(filepath, data.content);
+                document.getElementById('editor').value = data.content;
+                
+                updateTabs();
+                updateStatus(`Opened: ${filepath}`);
+                isDirty = false;
+            } catch (error) {
+                console.error('Error opening file:', error);
+                updateStatus('Error opening file', true);
+            }
+        }
+
+        // Save current file
+        async function saveCurrentFile() {
+            if (!currentFile || !currentProject || !isDirty) return;
+            
+            try {
+                const content = openFiles.get(currentFile);
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${currentFile}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                
+                if (response.ok) {
+                    isDirty = false;
+                    updateStatus(`Saved: ${currentFile}`);
+                }
+            } catch (error) {
+                console.error('Error saving file:', error);
+                updateStatus('Error saving file', true);
+            }
+        }
+
+        // Update editor tabs
+        function updateTabs() {
+            const tabsContainer = document.getElementById('editorTabs');
+            tabsContainer.innerHTML = '';
+            
+            openFiles.forEach((content, filepath) => {
+                const filename = filepath.split('/').pop();
+                const tab = document.createElement('div');
+                tab.className = `tab ${filepath === currentFile ? 'active' : ''}`;
+                tab.innerHTML = `<span onclick="openFile('${filepath}')">${filename}</span>
+                   <span class="tab-close" onclick="closeFile('${filepath}', event)">×</span>
+               `;
+               tabsContainer.appendChild(tab);
+           });
+       }
+
+       // Close file
+       function closeFile(filepath, event) {
+           event.stopPropagation();
+           
+           if (filepath === currentFile && isDirty) {
+               if (!confirm('Save changes before closing?')) {
+                   return;
+               }
+               saveCurrentFile();
+           }
+           
+           openFiles.delete(filepath);
+           
+           if (filepath === currentFile) {
+               // Switch to another open file or clear editor
+               const remainingFiles = Array.from(openFiles.keys());
+               if (remainingFiles.length > 0) {
+                   openFile(remainingFiles[0]);
+               } else {
+                   currentFile = null;
+                   document.getElementById('editor').value = '';
+               }
+           }
+           
+           updateTabs();
+       }
+
+       // Show/hide modals
+       function showNewProjectModal() {
+           document.getElementById('newProjectModal').style.display = 'block';
+           document.getElementById('newProjectName').focus();
+       }
+
+       function showNewFileModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           document.getElementById('newFileModal').style.display = 'block';
+           document.getElementById('newFilePath').focus();
+       }
+
+       function showNewFolderModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           document.getElementById('newFolderModal').style.display = 'block';
+           document.getElementById('newFolderPath').focus();
+       }
+
+       function closeModal(modalId) {
+           document.getElementById(modalId).style.display = 'none';
+       }
+
+       // Create project
+       async function createProject() {
+           const name = document.getElementById('newProjectName').value.trim();
+           const description = document.getElementById('newProjectDescription').value.trim();
+           
+           if (!name) {
+               alert('Project name is required');
+               return;
+           }
+           
+           try {
+               const response = await fetch(`${API_URL}/projects`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ name, description })
+               });
+               
+               if (response.ok) {
+                   const data = await response.json();
+                   closeModal('newProjectModal');
+                   await loadProjects();
+                   document.getElementById('projectSelector').value = data.project.id;
+                   loadProject(data.project.id);
+                   updateStatus(`Created project: ${name}`);
+               }
+           } catch (error) {
+               console.error('Error creating project:', error);
+               updateStatus('Error creating project', true);
+           }
+       }
+
+       // Create file
+       async function createFile() {
+           const filepath = document.getElementById('newFilePath').value.trim();
+           
+           if (!filepath) {
+               alert('File path is required');
+               return;
+           }
+           
+           try {
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ 
+                       filepath, 
+                       content: `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n` 
+                   })
+               });
+               
+               if (response.ok) {
+                   closeModal('newFileModal');
+                   await loadProjectFiles();
+                   openFile(filepath);
+                   updateStatus(`Created file: ${filepath}`);
+               }
+           } catch (error) {
+               console.error('Error creating file:', error);
+               updateStatus('Error creating file', true);
+           }
+       }
+
+       // Create folder
+        async function createFolder() {
+            const folderPath = document.getElementById('newFolderPath').value.trim();
+            
+            if (!folderPath) {
+                alert('Folder path is required');
+                return;
+            }
+            
+            console.log('Creating folder:', folderPath); // Debug log
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folderPath })
+                });
+                
+                console.log('Response status:', response.status); // Debug log
+                const data = await response.json();
+                console.log('Response data:', data); // Debug log
+                
+                if (response.ok) {
+                    closeModal('newFolderModal');
+                    await loadProjectFiles(); // Refresh the file tree
+                    updateStatus(`Created folder: ${folderPath}`);
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error creating folder:', error);
+                updateStatus('Error creating folder', true);
+                alert(`Error creating folder: ${error.message}`);
+            }
+        }
+
+       // Update status message
+       function updateStatus(message, isError = false) {
+           const statusMessage = document.getElementById('statusMessage');
+           statusMessage.textContent = message;
+           statusMessage.style.color = isError ? '#f48771' : '#ffffff';
+           
+           if (!isError) {
+               setTimeout(() => {
+                   statusMessage.textContent = 'Ready';
+               }, 3000);
+           }
+       }
+
+       // Keyboard shortcuts
+       document.addEventListener('keydown', (e) => {
+           // Ctrl/Cmd + S to save
+           if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+               e.preventDefault();
+               saveCurrentFile();
+           }
+           
+           // Ctrl/Cmd + N for new file
+           if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+               e.preventDefault();
+               showNewFileModal();
+           }
+       });
+
+       // Handle modal Enter key
+       document.querySelectorAll('.modal input').forEach(input => {
+           input.addEventListener('keypress', (e) => {
+               if (e.key === 'Enter') {
+                   const modal = input.closest('.modal');
+                   const primaryButton = modal.querySelector('.primary');
+                   primaryButton.click();
+               }
+           });
+       });
+
+       // Click outside modal to close
+       document.querySelectorAll('.modal').forEach(modal => {
+           modal.addEventListener('click', (e) => {
+               if (e.target === modal) {
+                   modal.style.display = 'none';
+               }
+           });
+       });
+   </script>
+</body>
+</html>
