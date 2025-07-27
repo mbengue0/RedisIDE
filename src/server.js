@@ -173,6 +173,50 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     }
 });
 
+// Rename file or folder
+app.put('/api/projects/:projectId/rename', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { oldPath, newPath, isFolder } = req.body;
+        
+        const result = await projectManager.renameItem(projectId, oldPath, newPath, isFolder);
+        res.json(result);
+    } catch (error) {
+        console.error('Error renaming:', error);
+        res.status(500).json({ error: 'Failed to rename' });
+    }
+});
+
+// Update the delete folder endpoint in server.js
+app.delete('/api/projects/:projectId/folders/:folderPath(*)', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const folderPath = req.params.folderPath || req.params[0]; // Handle both patterns
+        
+        console.log('Deleting folder:', folderPath); // Debug log
+        
+        const result = await projectManager.deleteFolder(projectId, folderPath);
+        res.json(result);
+    } catch (error) {
+        console.error('Error deleting folder:', error);
+        res.status(500).json({ error: error.message || 'Failed to delete folder' });
+    }
+});
+
+// Rename project
+app.put('/api/projects/:projectId', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { name } = req.body;
+        
+        const result = await projectManager.renameProject(projectId, name);
+        res.json(result);
+    } catch (error) {
+        console.error('Error renaming project:', error);
+        res.status(500).json({ error: 'Failed to rename project' });
+    }
+});
+
 // Save file endpoint (from checkpoint 1)
 app.post('/api/files', async (req, res) => {
     try {
