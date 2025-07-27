@@ -254,130 +254,69 @@ class ProjectManager {
         return { success: true };
     }
 
-    // Replace the entire renameItem method in projectManager.js
+    // Replace the ENTIRE renameItem method with this corrected version
     async renameItem(projectId, oldPath, newPath, isFolder = false) {
         try {
+            console.log(`Renaming ${isFolder ? 'folder' : 'file'}: ${oldPath} -> ${newPath}`);
+            
             if (isFolder) {
-                // Get all files in the folder
+                // Get all files that need to be renamed
                 const allFiles = await this.listProjectFiles(projectId);
-                const folderFiles = allFiles.filter(file => 
-                    file.filepath.startsWith(oldPath + '/')
+                const affectedFiles = allFiles.filter(file => 
+                    file.filepath === oldPath || file.filepath.startsWith(oldPath + '/')
                 );
                 
-                // Rename all files in the folder
-                for (const file of folderFiles) {
+                console.log(`Found ${affectedFiles.length} files to rename`);
+                
+                // Rename each file's Redis key
+                for (const file of affectedFiles) {
+                    const oldKey = file.key;
                     const newFilePath = file.filepath.replace(oldPath, newPath);
-                    const oldKey = `file:${projectId}:${file.filepath}`;
                     const newKey = `file:${projectId}:${newFilePath}`;
                     
+                    console.log(`Renaming file: ${file.filepath} -> ${newFilePath}`);
+                    
+                    // Get the file data
                     const fileData = await this.client.hGetAll(oldKey);
+                    
                     if (fileData && Object.keys(fileData).length > 0) {
+                        // Create new key with updated filepath
                         await this.client.hSet(newKey, {
                             ...fileData,
                             filepath: newFilePath,
                             updatedAt: new Date().toISOString()
                         });
+                        
+                        // Delete old key
                         await this.client.del(oldKey);
-                    }
-                }
-                
-                // Update the folder in project structure
-                const project = await this.getProject(projectId);
-                if (project) {
-                    const oldParts = oldPath.split('/').filter(p => p);
-                    const newParts = newPath.split('/').filter(p => p);
-                    const newFolderName = newParts[newParts.length - 1];
-                    
-                    // Navigate to the folder and rename it
-                    let current = project.files;
-                    let parent = null;
-                    
-                    // Navigate to the parent of the folder being renamed
-                    for (let i = 0; i < oldParts.length - 1; i++) {
-                        if (current[oldParts[i]]) {
-                            parent = current;
-                            current = current[oldParts[i]].children || {};
-                        }
-                    }
-                    
-                    // Get the folder object
-                    const folderToRename = current[oldParts[oldParts.length - 1]];
-                    
-                    if (folderToRename) {
-                        // If renaming at root level
-                        if (oldParts.length === 1) {
-                            project.files[newFolderName] = folderToRename;
-                            delete project.files[oldParts[0]];
-                        } else {
-                            // If renaming in nested structure
-                            parent[oldParts[oldParts.length - 2]].children[newFolderName] = folderToRename;
-                            delete parent[oldParts[oldParts.length - 2]].children[oldParts[oldParts.length - 1]];
-                        }
-                        
-                        project.updatedAt = new Date().toISOString();
-                        
-                        try {
-                            await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
-                        } catch (error) {
-                            await this.client.set(`project:${projectId}`, JSON.stringify(project));
-                        }
+                        console.log(`Renamed Redis key: ${oldKey} -> ${newKey}`);
                     }
                 }
             } else {
-                // Handle file rename (existing code)
+                // Handle single file rename
                 const oldKey = `file:${projectId}:${oldPath}`;
                 const newKey = `file:${projectId}:${newPath}`;
                 
                 const fileData = await this.client.hGetAll(oldKey);
+                
                 if (fileData && Object.keys(fileData).length > 0) {
                     await this.client.hSet(newKey, {
                         ...fileData,
                         filepath: newPath,
                         updatedAt: new Date().toISOString()
                     });
+                    
                     await this.client.del(oldKey);
-                }
-                
-                // Update file in project structure
-                const project = await this.getProject(projectId);
-                if (project) {
-                    const oldParts = oldPath.split('/').filter(p => p);
-                    const newParts = newPath.split('/').filter(p => p);
-                    const newFileName = newParts[newParts.length - 1];
-                    
-                    // Navigate to the file and rename it
-                    let current = project.files;
-                    
-                    // Navigate to parent folder
-                    for (let i = 0; i < oldParts.length - 1; i++) {
-                        if (current[oldParts[i]]) {
-                            current = current[oldParts[i]].children || {};
-                        }
-                    }
-                    
-                    // Get the file object
-                    const fileToRename = current[oldParts[oldParts.length - 1]];
-                    
-                    if (fileToRename) {
-                        fileToRename.path = newPath;
-                        fileToRename.name = newFileName;
-                        current[newFileName] = fileToRename;
-                        delete current[oldParts[oldParts.length - 1]];
-                        
-                        project.updatedAt = new Date().toISOString();
-                        
-                        try {
-                            await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
-                        } catch (error) {
-                            await this.client.set(`project:${projectId}`, JSON.stringify(project));
-                        }
-                    }
+                    console.log(`Renamed file: ${oldKey} -> ${newKey}`);
                 }
             }
             
+            // Rebuild the project structure from the updated files
+            await this.updateProjectStructure(projectId);
+            
             return { success: true, oldPath, newPath };
         } catch (error) {
-            console.error('Error renaming item:', error);
+            console.error('Error in renameItem:', error);
             throw error;
         }
     }
@@ -385,48 +324,80 @@ class ProjectManager {
     // Replace the entire deleteFolder method in projectManager.js
     async deleteFolder(projectId, folderPath) {
         try {
-            // Get all files in the folder
+            console.log('Deleting folder:', folderPath); // Debug log
+            
+            // First, delete all files in the folder
             const allFiles = await this.listProjectFiles(projectId);
             const folderFiles = allFiles.filter(file => 
-                file.filepath.startsWith(folderPath + '/')
+                file.filepath === folderPath || file.filepath.startsWith(folderPath + '/')
             );
+            
+            console.log('Files to delete:', folderFiles.length); // Debug log
             
             // Delete all files
             for (const file of folderFiles) {
                 await this.client.del(file.key);
             }
             
-            // Now remove the folder from project structure
+            // Now update the project structure to remove the folder
             const project = await this.getProject(projectId);
-            if (project) {
-                const pathParts = folderPath.split('/').filter(p => p);
-                
-                if (pathParts.length === 1) {
-                    // Root level folder
+            if (!project) {
+                throw new Error('Project not found');
+            }
+            
+            const pathParts = folderPath.split('/').filter(p => p);
+            console.log('Path parts:', pathParts); // Debug log
+            
+            if (pathParts.length === 0) {
+                throw new Error('Invalid folder path');
+            }
+            
+            if (pathParts.length === 1) {
+                // Root level folder - simply delete it
+                if (project.files[pathParts[0]]) {
                     delete project.files[pathParts[0]];
-                } else {
-                    // Nested folder - navigate to parent and delete
-                    let current = project.files;
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        if (current[pathParts[i]] && current[pathParts[i]].children) {
-                            current = current[pathParts[i]].children;
-                        }
+                    console.log('Deleted root folder:', pathParts[0]); // Debug log
+                }
+            } else {
+                // Nested folder - navigate to parent and delete
+                let current = project.files;
+                let parent = null;
+                let parentKey = null;
+                
+                // Navigate to the parent folder
+                for (let i = 0; i < pathParts.length - 1; i++) {
+                    const part = pathParts[i];
+                    if (current[part] && current[part].children) {
+                        parent = current[part];
+                        parentKey = 'children';
+                        current = current[part].children;
+                    } else {
+                        throw new Error(`Parent folder not found: ${part}`);
                     }
-                    delete current[pathParts[pathParts.length - 1]];
                 }
                 
-                project.updatedAt = new Date().toISOString();
-                
-                try {
-                    await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
-                } catch (error) {
-                    await this.client.set(`project:${projectId}`, JSON.stringify(project));
+                // Delete the target folder
+                const folderName = pathParts[pathParts.length - 1];
+                if (parent && parent[parentKey] && parent[parentKey][folderName]) {
+                    delete parent[parentKey][folderName];
+                    console.log('Deleted nested folder:', folderName); // Debug log
                 }
             }
             
+            // Save the updated project
+            project.updatedAt = new Date().toISOString();
+            
+            try {
+                await this.client.sendCommand(['JSON.SET', `project:${projectId}`, '$', JSON.stringify(project)]);
+            } catch (error) {
+                await this.client.set(`project:${projectId}`, JSON.stringify(project));
+            }
+            
+            console.log('Project structure updated'); // Debug log
+            
             return { success: true, deletedCount: folderFiles.length };
         } catch (error) {
-            console.error('Error deleting folder:', error);
+            console.error('Error in deleteFolder:', error);
             throw error;
         }
     }

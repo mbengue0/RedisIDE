@@ -187,19 +187,20 @@ app.put('/api/projects/:projectId/rename', async (req, res) => {
     }
 });
 
-// Update the delete folder endpoint in server.js
+// In server.js, ensure the delete folder endpoint looks like this:
 app.delete('/api/projects/:projectId/folders/:folderPath(*)', async (req, res) => {
     try {
         const { projectId } = req.params;
-        const folderPath = req.params.folderPath || req.params[0]; // Handle both patterns
+        // Handle the wildcard parameter correctly
+        const folderPath = req.params.folderPath || req.params[0] || '';
         
-        console.log('Deleting folder:', folderPath); // Debug log
+        console.log('Server: Deleting folder:', folderPath, 'from project:', projectId);
         
         const result = await projectManager.deleteFolder(projectId, folderPath);
         res.json(result);
     } catch (error) {
-        console.error('Error deleting folder:', error);
-        res.status(500).json({ error: error.message || 'Failed to delete folder' });
+        console.error('Server: Error deleting folder:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
