@@ -530,28 +530,44 @@
             updateTreeControlsHint();
         };
 
-        // Add this function to show undo notification
+        // Replace the showUndoNotification function
         function showUndoNotification(itemName, itemType, restoreFunction) {
             // Clear any existing notification
             const existing = document.querySelector('.undo-notification');
             if (existing) existing.remove();
             
+            // Clear any existing timeout
+            if (undoTimeout) {
+                clearTimeout(undoTimeout);
+            }
+            
             const notification = document.createElement('div');
             notification.className = 'undo-notification';
             notification.innerHTML = `
                 <span>Deleted ${itemType} "${itemName}"</span>
-                <button class="undo-button" onclick="undoDelete()">Undo</button>
+                <button class="undo-button">Undo</button>
             `;
             
             document.body.appendChild(notification);
             
-            // Store the restore function
-            window.currentUndo = restoreFunction;
+            // Add click handler directly to the button
+            const undoButton = notification.querySelector('.undo-button');
+            undoButton.addEventListener('click', async () => {
+                try {
+                    await restoreFunction();
+                    notification.remove();
+                    if (undoTimeout) {
+                        clearTimeout(undoTimeout);
+                    }
+                } catch (error) {
+                    console.error('Error undoing delete:', error);
+                    updateStatus('Failed to undo deletion', true);
+                }
+            });
             
             // Auto-remove after 5 seconds
             undoTimeout = setTimeout(() => {
                 notification.remove();
-                window.currentUndo = null;
             }, 5000);
         }
 
@@ -694,68 +710,10 @@
             });
         }
 
-        // Replace smartDelete function - same logic, NO POPUPS except for folders with contents
+        // Also update smartDelete to use the same undo functionality
         async function smartDelete() {
-            if (!contextMenuTarget) return;
-            
-            const name = contextMenuTarget.split('/').pop();
-            
-            try {
-                // In deleteItem function, update the file deletion part:
-                if (contextMenuType === 'file') {
-                    // Delete file immediately - NO POPUP
-                    const response = await fetch(
-                        `${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`, 
-                        {
-                            method: 'DELETE'
-                        }
-                    );
-                    
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Failed to delete file');
-                    }
-                    
-                    if (openFiles.has(contextMenuTarget)) {
-                        closeFile(contextMenuTarget);
-                    }
-                    
-                    updateStatus(`Deleted file: ${name}`);
-                }else {
-                    // Check if folder has contents
-                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
-                    const data = await response.json();
-                    const hasContents = data.files.some(file => 
-                        file.filepath.startsWith(contextMenuTarget + '/')
-                    );
-                    
-                    // Only confirm for folders with contents
-                    if (hasContents) {
-                        if (!confirm(`Delete folder "${name}" and all its contents?`)) return;
-                    }
-                    
-                    const deleteResponse = await fetch(
-                        `${API_URL}/projects/${currentProject.id}/folders/${encodeURIComponent(contextMenuTarget)}`, 
-                        {
-                            method: 'DELETE'
-                        }
-                    );
-                    
-                    if (!deleteResponse.ok) {
-                        const error = await deleteResponse.json();
-                        console.error('Delete folder failed:', error);
-                        updateStatus('Failed to delete folder', true);
-                        return;
-                    }
-                    
-                    updateStatus(`Deleted folder: ${name}`);
-                }
-                
-                await loadProjectFiles();
-            } catch (error) {
-                console.error('Error deleting:', error);
-                updateStatus('Error deleting item', true);
-            }
+            // Just call deleteItem since they should have the same behavior
+            await deleteItem();
         }
 
         // 4. Project Management in Dropdown
@@ -1848,7 +1806,7 @@
             }
         }
 
-        // Update deleteItem to use undo instead of popup
+        // Update deleteItem with better undo support
         async function deleteItem() {
             if (!contextMenuTarget) return;
             
@@ -1858,35 +1816,74 @@
                 if (contextMenuType === 'file') {
                     // Store file content before deleting
                     const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to get file for backup');
+                    }
+                    
                     const fileData = await response.json();
+                    const savedContent = fileData.content;
+                    const savedPath = contextMenuTarget;
                     
                     // Delete the file
-                    await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`, {
+                    const deleteResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`, {
                         method: 'DELETE'
                     });
+                    
+                    if (!deleteResponse.ok) {
+                        throw new Error('Failed to delete file');
+                    }
                     
                     if (openFiles.has(contextMenuTarget)) {
                         closeFile(contextMenuTarget);
                     }
                     
-                    // Show undo notification
+                    // Show undo notification with restore function
                     showUndoNotification(name, 'file', async () => {
-                        // Restore function
-                        await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                        // Restore the file
+                        const restoreResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                filepath: contextMenuTarget, 
-                                content: fileData.content 
+                                filepath: savedPath, 
+                                content: savedContent 
                             })
                         });
+                        
+                        if (!restoreResponse.ok) {
+                            throw new Error('Failed to restore file');
+                        }
+                        
                         await loadProjectFiles();
                         updateStatus(`Restored file: ${name}`);
                     });
                     
                     updateStatus(`Deleted file: ${name}`);
+                    
                 } else {
-                    // For folders - delete immediately, show undo
+                    // For folders, store the folder structure before deleting
+                    const filesResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                    const filesData = await filesResponse.json();
+                    
+                    // Find all files in the folder
+                    const folderFiles = filesData.files.filter(file => 
+                        file.filepath === contextMenuTarget || 
+                        file.filepath.startsWith(contextMenuTarget + '/')
+                    );
+                    
+                    // Store file contents before deletion
+                    const savedFiles = [];
+                    for (const file of folderFiles) {
+                        const fileResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(file.filepath)}`);
+                        if (fileResponse.ok) {
+                            const fileData = await fileResponse.json();
+                            savedFiles.push({
+                                filepath: file.filepath,
+                                content: fileData.content
+                            });
+                        }
+                    }
+                    
+                    // Delete the folder
                     const deleteResponse = await fetch(
                         `${API_URL}/projects/${currentProject.id}/folders/${encodeURIComponent(contextMenuTarget)}`, 
                         {
@@ -1905,10 +1902,41 @@
                     }
                     expandedFolders.delete(contextMenuTarget);
                     
-                    // Show undo notification (simplified for now)
+                    // Close any open files from this folder
+                    savedFiles.forEach(file => {
+                        if (openFiles.has(file.filepath)) {
+                            closeFile(file.filepath);
+                        }
+                    });
+                    
+                    // Show undo notification with restore function
+                    const folderPath = contextMenuTarget;
                     showUndoNotification(name, 'folder', async () => {
-                        updateStatus('Folder restore not implemented yet', true);
-                        // TODO: Implement folder restore
+                        // First recreate the folder
+                        const folderResponse = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folderPath })
+                        });
+                        
+                        if (!folderResponse.ok) {
+                            throw new Error('Failed to restore folder');
+                        }
+                        
+                        // Then restore all files
+                        for (const file of savedFiles) {
+                            await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    filepath: file.filepath, 
+                                    content: file.content 
+                                })
+                            });
+                        }
+                        
+                        await loadProjectFiles();
+                        updateStatus(`Restored folder: ${name} (${savedFiles.length} files)`);
                     });
                     
                     updateStatus(`Deleted folder: ${name}`);
