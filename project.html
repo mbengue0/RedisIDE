@@ -68,6 +68,13 @@
             flex: 1;
             overflow-y: auto;
             padding: 10px;
+            min-height: 100px;
+            position: relative;
+        }
+        
+        .file-tree.drag-over {
+            background-color: rgba(0, 122, 204, 0.1);
+            outline: 2px dashed #007acc;
         }
         
         .tree-item {
@@ -75,10 +82,11 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             border-radius: 3px;
             font-size: 13px;
             user-select: none;
+            transition: padding-left 0.2s ease;
         }
         
         .tree-item:hover {
@@ -93,6 +101,32 @@
             font-weight: 500;
         }
         
+        .tree-item.folder.selected {
+            background-color: #37373d;
+        }
+        
+        .tree-item.drag-over {
+            background-color: #007acc !important;
+            outline: 2px solid #007acc;
+        }
+        
+        .tree-item[draggable="true"] {
+            cursor: move;
+        }
+        
+        .folder-arrow {
+            width: 12px;
+            font-size: 10px;
+            color: #cccccc;
+            cursor: pointer;
+            user-select: none;
+            display: inline-block;
+        }
+        
+        .folder-arrow:hover {
+            color: #ffffff;
+        }
+        
         .tree-item .icon {
             width: 16px;
             height: 16px;
@@ -104,6 +138,20 @@
             border-top: 1px solid #3e3e42;
             display: flex;
             gap: 5px;
+            position: relative;
+        }
+        
+        .tree-controls::before {
+            content: attr(data-hint);
+            display: block;
+            position: absolute;
+            top: -20px;
+            left: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
         }
         
         .tree-controls button {
@@ -164,6 +212,14 @@
         
         .tab-close:hover {
             color: #fff;
+        }
+        
+        .tab.dirty::after {
+            content: '•';
+            color: #fff;
+            margin-left: 5px;
+            font-size: 20px;
+            line-height: 0;
         }
         
         .editor-container {
@@ -263,91 +319,46 @@
             border: 1px solid #3e3e42;
         }
         
+        /* Context Menu */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 4px 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            min-width: 150px;
+        }
+        
+        .context-menu-item {
+            padding: 6px 20px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #094771;
+        }
+        
+        .context-menu-item .icon {
+            width: 16px;
+            text-align: center;
+        }
+        
+        .context-menu-separator {
+            height: 1px;
+            background-color: #3e3e42;
+            margin: 4px 0;
+        }
+        
         /* File tree nested items */
         .tree-item.nested {
             margin-left: 20px;
-        }
-
-        .tree-item.folder {
-            cursor: pointer;
-        }
-
-        .tree-item.folder:hover {
-            background-color: #37373d;
-        }
-
-        .tree-item.folder.selected {
-            background-color: #2a2a2a;
-            border-left: 3px solid #007acc;
-        }
-
-        /* Show a hint when folder is selected */
-        .tree-controls::before {
-            content: attr(data-hint);
-            display: block;
-            padding: 5px 10px;
-            font-size: 11px;
-            color: #888;
-            text-align: center;
-        }
-
-        /* Add these styles to the <style> section */
-        .tree-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .folder-arrow {
-            width: 12px;
-            font-size: 10px;
-            color: #cccccc;
-            cursor: pointer;
-            user-select: none;
-            display: inline-block;
-        }
-
-        .folder-arrow:hover {
-            color: #ffffff;
-        }
-
-        .tree-item.folder {
-            cursor: pointer;
-        }
-
-        .tree-item.folder:hover {
-            background-color: #2a2a2a;
-        }
-
-        .tree-item.folder.selected {
-            background-color: #37373d;
-        }
-
-        .tree-item.file {
-            cursor: pointer;
-        }
-
-        .tree-item.file:hover {
-            background-color: #2a2a2a;
-        }
-
-        .tree-item.file.selected {
-            background-color: #094771;
-        }
-
-        /* Update the tree controls hint */
-        .tree-controls {
-            position: relative;
-        }
-
-        .tree-controls::before {
-            content: attr(data-hint);
-            display: block;
-            padding: 5px 10px;
-            font-size: 11px;
-            color: #888;
-            text-align: center;
-            height: 20px;
         }
     </style>
 </head>
@@ -368,8 +379,7 @@
                 </div>
             </div>
             
-            // Update this part of the HTML
-            <div class="tree-controls" id="treeControls">
+            <div class="tree-controls" id="treeControls" data-hint="📁 root">
                 <button onclick="showNewFileModal()">📄 New File</button>
                 <button onclick="showNewFolderModal()">📁 New Folder</button>
             </div>
@@ -389,6 +399,27 @@
                 <span class="status-message" id="statusMessage">Ready</span>
                 <span id="cursorPosition">Ln 1, Col 1</span>
             </div>
+        </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="startInlineRename()">
+            <span class="icon">✏️</span>
+            <span>Rename (F2)</span>
+        </div>
+        <div class="context-menu-item" onclick="deleteItem()">
+            <span class="icon">🗑️</span>
+            <span>Delete</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="newFileInFolder()">
+            <span class="icon">📄</span>
+            <span>New File</span>
+        </div>
+        <div class="context-menu-item" onclick="newFolderInFolder()">
+            <span class="icon">📁</span>
+            <span>New Folder</span>
         </div>
     </div>
     
@@ -433,33 +464,302 @@
         let openFiles = new Map(); // filepath -> content
         let currentFile = null;
         let isDirty = false;
-        let currentFolder = null; // Track which folder is selected
-        let expandedFolders = new Set(); // Track which folders are expanded
+        let currentFolder = null;
+        let expandedFolders = new Set();
+        // 1. Inline Rename (F2 or slow double-click)
+        let renameTimeout = null;
+        let isRenaming = false;
+        // Drag and drop variables
+        let draggedItem = null;
+        let draggedItemPath = null;
+        let draggedItemType = null;
+        let lastContextElement = null;
+        // Context menu variables
+        let contextMenuTarget = null;
+        let contextMenuType = null;
 
         // Initialize
-        // Replace the window.onload section
         window.onload = async () => {
-            // Initialize expanded folders set
-            if (!expandedFolders) {
-                expandedFolders = new Set();
-            }
-            
             await loadProjects();
+            setupEditor();
+            setupEventListeners();
             updateTreeControlsHint();
         };
 
-        // Make sure this function exists
-        function updateTreeControlsHint() {
-            const controls = document.getElementById('treeControls');
-            if (controls) {
-                if (currentFolder) {
-                    controls.setAttribute('data-hint', `📁 ${currentFolder}`);
-                } else {
-                    controls.setAttribute('data-hint', '📁 root');
+        function enableInlineRename(element, currentPath, type) {
+            if (isRenaming) return;
+            
+            isRenaming = true;
+            const originalName = currentPath.split('/').pop();
+            const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            
+            // Create input element
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = originalName;
+            input.style.cssText = `
+                background: #3c3c3c;
+                border: 1px solid #007acc;
+                color: #cccccc;
+                padding: 2px 5px;
+                font-size: 13px;
+                font-family: inherit;
+                width: 150px;
+            `;
+            
+            // Replace the span with input
+            const nameSpan = element.querySelector('span:last-child');
+            const originalContent = nameSpan.textContent;
+            nameSpan.textContent = '';
+            nameSpan.appendChild(input);
+            
+            input.focus();
+            input.select();
+            
+            // Handle save
+            const saveRename = async () => {
+                const newName = input.value.trim();
+                
+                if (newName && newName !== originalName) {
+                    const newPath = basePath ? basePath + '/' + newName : newName;
+                    
+                    try {
+                        const response = await fetch(`${API_URL}/projects/${currentProject.id}/rename`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                oldPath: currentPath, 
+                                newPath: newPath, 
+                                isFolder: type === 'folder' 
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            updateStatus(`Renamed to ${newName}`);
+                            await loadProjectFiles();
+                            
+                            // Update open files if needed
+                            if (type === 'file' && openFiles.has(currentPath)) {
+                                const content = openFiles.get(currentPath);
+                                openFiles.delete(currentPath);
+                                openFiles.set(newPath, content);
+                                if (currentFile === currentPath) {
+                                    currentFile = newPath;
+                                    updateTabs();
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error renaming:', error);
+                        updateStatus('Error renaming', true);
+                    }
                 }
+                
+                nameSpan.textContent = originalContent;
+                isRenaming = false;
+            };
+            
+            // Handle cancel
+            const cancelRename = () => {
+                nameSpan.textContent = originalContent;
+                isRenaming = false;
+            };
+            
+            input.addEventListener('blur', saveRename);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveRename();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelRename();
+                }
+            });
+        }
+
+        // Update your setupKeyboardShortcuts function with better debugging
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', async (e) => {
+                // Log all keypresses for debugging
+                if (e.key === 'F2' || e.key === 'Delete') {
+                    console.log('Key pressed:', e.key);
+                    console.log('contextMenuTarget:', contextMenuTarget);
+                    console.log('lastContextElement:', window.lastContextElement);
+                }
+                
+                // F2 for rename
+                if (e.key === 'F2') {
+                    e.preventDefault();
+                    if (contextMenuTarget) {
+                        // Find the element by data-path attribute
+                        const element = document.querySelector(`[data-path="${contextMenuTarget}"]`);
+                        if (element) {
+                            window.lastContextElement = element;
+                            startInlineRename();
+                        } else {
+                            console.log('Could not find element for path:', contextMenuTarget);
+                        }
+                    } else {
+                        console.log('No file/folder selected. Right-click to select first.');
+                    }
+                }
+                
+                // Delete key
+                if (e.key === 'Delete') {
+                    e.preventDefault();
+                    if (contextMenuTarget) {
+                        await smartDelete();
+                    } else {
+                        console.log('No file/folder selected. Right-click to select first.');
+                    }
+                }
+            });
+        }
+
+        // Replace your smartDelete function
+        async function smartDelete() {
+            if (!contextMenuTarget) return;
+            
+            const name = contextMenuTarget.split('/').pop();
+            let needsConfirmation = false;
+            
+            if (contextMenuType === 'folder') {
+                // Check if folder has contents
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                const data = await response.json();
+                const hasContents = data.files.some(file => 
+                    file.filepath.startsWith(contextMenuTarget + '/')
+                );
+                needsConfirmation = hasContents;
+            }
+            
+            if (needsConfirmation) {
+                if (!confirm(`Delete folder "${name}" and all its contents?`)) return;
+            }
+            
+            try {
+                if (contextMenuType === 'file') {
+                    await fetch(`${API_URL}/projects/${currentProject.id}/files/${contextMenuTarget}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (openFiles.has(contextMenuTarget)) {
+                        closeFile(contextMenuTarget);
+                    }
+                } else {
+                    // Use the folders endpoint for folders
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/folders/${encodeURIComponent(contextMenuTarget)}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        console.error('Delete folder failed:', error);
+                        updateStatus('Failed to delete folder', true);
+                        return;
+                    }
+                }
+                
+                updateStatus(`Deleted ${name}`);
+                await loadProjectFiles();
+            } catch (error) {
+                console.error('Error deleting:', error);
+                updateStatus('Error deleting item', true);
             }
         }
 
+        // 4. Project Management in Dropdown
+        function createProjectDropdown() {
+            const selector = document.getElementById('projectSelector');
+            
+            // Add event listener for right-click on options
+            selector.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (e.target.tagName === 'OPTION' && e.target.value) {
+                    showProjectContextMenu(e, e.target.value, e.target.textContent);
+                }
+            });
+        }
+
+        function showProjectContextMenu(event, projectId, projectName) {
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.cssText = `
+                display: block;
+                left: ${event.pageX}px;
+                top: ${event.pageY}px;
+            `;
+            
+            menu.innerHTML = `
+                <div class="context-menu-item" onclick="renameProjectPrompt('${projectId}', '${projectName}')">
+                    <span class="icon">✏️</span>
+                    <span>Rename Project</span>
+                </div>
+                <div class="context-menu-item" onclick="deleteProjectPrompt('${projectId}', '${projectName}')">
+                    <span class="icon">🗑️</span>
+                    <span>Delete Project</span>
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // Remove on click outside
+            setTimeout(() => {
+                document.addEventListener('click', () => menu.remove(), { once: true });
+            }, 0);
+        }
+
+        async function renameProjectPrompt(projectId, oldName) {
+            const newName = prompt('New project name:', oldName);
+            if (!newName || newName === oldName) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Project renamed to ${newName}`);
+                    await loadProjects();
+                    if (currentProject && currentProject.id === projectId) {
+                        currentProject.name = newName;
+                    }
+                }
+            } catch (error) {
+                console.error('Error renaming project:', error);
+                updateStatus('Error renaming project', true);
+            }
+        }
+
+        async function deleteProjectPrompt(projectId, projectName) {
+            if (!confirm(`Delete project "${projectName}" and ALL its files? This cannot be undone.`)) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Project ${projectName} deleted`);
+                    if (currentProject && currentProject.id === projectId) {
+                        currentProject = null;
+                        openFiles.clear();
+                        currentFile = null;
+                        document.getElementById('fileTree').innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Select a project</div>';
+                        document.getElementById('editor').value = '';
+                        updateTabs();
+                    }
+                    await loadProjects();
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+                updateStatus('Error deleting project', true);
+            }
+        }
+ 
+        
         // Setup editor
         function setupEditor() {
             const editor = document.getElementById('editor');
@@ -469,6 +769,7 @@
                     isDirty = true;
                     openFiles.set(currentFile, editor.value);
                     updateStatus('Modified');
+                    updateTabs();
                     
                     // Auto-save after 1 second of inactivity
                     clearTimeout(window.saveTimeout);
@@ -478,39 +779,71 @@
                 }
             });
             
-            // Add this JavaScript to update the hint
-            function updateTreeControlsHint() {
-                const controls = document.getElementById('treeControls');
-                if (currentFolder) {
-                    controls.setAttribute('data-hint', `Creating in: ${currentFolder}/`);
-                } else {
-                    controls.setAttribute('data-hint', 'Creating in: root');
-                }
-            }
-
-            // Call this in selectFolder function
-            // Update the selectFolder function
-            function selectFolder(folderPath, event) {
-                if (event) {
-                    event.stopPropagation();
-                }
-                currentFolder = folderPath;
-                updateTreeControlsHint();
-                updateStatus(`Selected folder: ${folderPath}`);
-                
-                // Highlight the selected folder without reloading the tree
-                document.querySelectorAll('.tree-item.folder').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                event.currentTarget.classList.add('selected');
-            }
-
             // Update cursor position
             editor.addEventListener('selectionchange', () => {
                 const lines = editor.value.substring(0, editor.selectionStart).split('\n');
                 const line = lines.length;
                 const col = lines[lines.length - 1].length + 1;
                 document.getElementById('cursorPosition').textContent = `Ln ${line}, Col ${col}`;
+            });
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Click outside context menu to close
+            document.addEventListener('click', () => {
+                document.getElementById('contextMenu').style.display = 'none';
+            });
+            
+            // File tree click handler for deselection
+            document.getElementById('fileTree').addEventListener('click', (e) => {
+                if (e.target.id === 'fileTree' || e.target.classList.contains('empty-message')) {
+                    currentFolder = null;
+                    document.querySelectorAll('.tree-item.folder').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    updateTreeControlsHint();
+                    updateStatus('No folder selected');
+                }
+            });
+            
+            // File tree drag handlers
+            const fileTree = document.getElementById('fileTree');
+            fileTree.addEventListener('dragover', handleDragOver);
+            fileTree.addEventListener('drop', (e) => {
+                if (e.target === fileTree || e.target.classList.contains('empty-message')) {
+                    handleDrop(e, '', 'root');
+                }
+            });
+            fileTree.addEventListener('dragenter', (e) => {
+                if (e.target === e.currentTarget) {
+                    e.currentTarget.classList.add('drag-over');
+                }
+            });
+            fileTree.addEventListener('dragleave', (e) => {
+                if (e.target === e.currentTarget) {
+                    e.currentTarget.classList.remove('drag-over');
+                }
+            });
+            
+            // Modal Enter key handlers
+            document.querySelectorAll('.modal input').forEach(input => {
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const modal = input.closest('.modal');
+                        const primaryButton = modal.querySelector('.primary');
+                        primaryButton.click();
+                    }
+                });
+            });
+            
+            // Click outside modal to close
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
             });
         }
 
@@ -541,7 +874,7 @@
             }
         }
 
-        // Update the loadProject function to auto-expand root folders
+        // Load project
         async function loadProject(projectId) {
             try {
                 // Clear state when switching projects
@@ -549,6 +882,7 @@
                 currentFile = null;
                 currentFolder = null;
                 expandedFolders.clear();
+                updateTabs();
                 
                 const response = await fetch(`${API_URL}/projects/${projectId}`);
                 const data = await response.json();
@@ -581,20 +915,11 @@
                 const projectResponse = await fetch(`${API_URL}/projects/${currentProject.id}`);
                 const projectData = await projectResponse.json();
                 
-                // Get the list of files
-                const filesResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
-                const filesData = await filesResponse.json();
-                
-                // Render the project structure
                 const fileTree = document.getElementById('fileTree');
                 
                 if (projectData.project && projectData.project.files) {
-                    // Use the project's file structure (includes empty folders)
                     const treeHtml = renderTreeNodes(projectData.project.files, 0);
                     fileTree.innerHTML = treeHtml || '<div style="padding: 20px; text-align: center; color: #888;">Empty project. Create files or folders!</div>';
-                } else if (filesData.files.length > 0) {
-                    // Fallback to building tree from files
-                    renderFileTree(filesData.files);
                 } else {
                     fileTree.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files yet. Create your first file!</div>';
                 }
@@ -603,60 +928,7 @@
             }
         }
 
-       // Update in project.html
-        function renderFileTree(files) {
-            const fileTree = document.getElementById('fileTree');
-            
-            if (files.length === 0 && !currentProject) {
-                fileTree.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files yet. Create your first file!</div>';
-                return;
-            }
-            
-            // First, get the project structure to include empty folders
-            if (currentProject) {
-                // Build tree from project structure instead of just files
-                loadProjectStructure();
-            } else {
-                // Fallback to file-based tree
-                const tree = {};
-                files.forEach(file => {
-                    const parts = file.filepath.split('/');
-                    let current = tree;
-                    
-                    parts.forEach((part, index) => {
-                        if (index === parts.length - 1) {
-                            // It's a file
-                            current[part] = { type: 'file', path: file.filepath, size: file.size };
-                        } else {
-                            // It's a folder
-                            if (!current[part]) {
-                                current[part] = { type: 'folder', children: {} };
-                            }
-                            current = current[part].children;
-                        }
-                    });
-                });
-                
-                fileTree.innerHTML = renderTreeNodes(tree, 0);
-            }
-        }
-
-        // Add this new function to load the complete project structure
-        async function loadProjectStructure() {
-            try {
-                const response = await fetch(`${API_URL}/projects/${currentProject.id}`);
-                const data = await response.json();
-                
-                if (data.project && data.project.files) {
-                    const fileTree = document.getElementById('fileTree');
-                    fileTree.innerHTML = renderTreeNodes(data.project.files, 0);
-                }
-            } catch (error) {
-                console.error('Error loading project structure:', error);
-            }
-        }
-
-        // Update the renderTreeNodes function to make folders clickable
+        // Render tree nodes recursively
         function renderTreeNodes(nodes, level, parentPath = '') {
             let html = '';
             
@@ -681,9 +953,19 @@
                     
                     html += `
                         <div class="tree-item folder ${isSelected}" 
-                            style="padding-left: ${indent}px"
-                            onclick="selectFolder('${currentPath}', event)"
-                            ondblclick="toggleFolder('${currentPath}', event)">
+                             data-path="${currentPath}"
+                             data-type="folder"
+                             style="padding-left: ${indent}px"
+                             onclick="selectFolder('${currentPath}', event)"
+                             ondblclick="handleDoubleClick(event, '${currentPath}', 'folder')"
+                             oncontextmenu="showContextMenu(event, '${currentPath}', 'folder')"
+                             draggable="true"
+                             ondragstart="handleDragStart(event, '${currentPath}', 'folder')"
+                             ondragend="handleDragEnd(event)"
+                             ondragover="handleDragOver(event)"
+                             ondragenter="handleDragEnter(event, '${currentPath}')"
+                             ondragleave="handleDragLeave(event)"
+                             ondrop="handleDrop(event, '${currentPath}', 'folder')">
                             <span class="folder-arrow" onclick="toggleFolder('${currentPath}', event)">
                                 ${hasChildren ? (isExpanded ? '▼' : '▶') : ''}
                             </span>
@@ -701,8 +983,19 @@
                     const isActive = filePath === currentFile ? 'selected' : '';
                     html += `
                         <div class="tree-item file ${isActive}" 
-                            style="padding-left: ${indent + 20}px" 
-                            onclick="openFile('${filePath}')">
+                             data-path="${filePath}"
+                             data-type="file"
+                             style="padding-left: ${indent + 20}px" 
+                             onclick="handleFileClick(event, '${filePath}')"
+                             ondblclick="handleDoubleClick(event, '${filePath}', 'file')"
+                             oncontextmenu="showContextMenu(event, '${filePath}', 'file')"
+                             draggable="true"
+                             ondragstart="handleDragStart(event, '${filePath}', 'file')"
+                             ondragend="handleDragEnd(event)"
+                             ondragover="handleDragOver(event)"
+                             ondragenter="handleDragEnter(event, '${filePath}')"
+                             ondragleave="handleDragLeave(event)"
+                             ondrop="handleDrop(event, '${filePath}', 'file')">
                             <span class="icon">${icon}</span>
                             <span>${name}</span>
                         </div>
@@ -713,24 +1006,23 @@
             return html;
         }
 
-        // Add toggle folder function
-        function toggleFolder(folderPath, event) {
+        // Handle double click for rename
+        function handleDoubleClick(event, path, type) {
+            event.preventDefault();
             event.stopPropagation();
             
-            if (expandedFolders.has(folderPath)) {
-                expandedFolders.delete(folderPath);
-            } else {
-                expandedFolders.add(folderPath);
-            }
-            
-            loadProjectFiles();
+            clearTimeout(renameTimeout);
+            renameTimeout = setTimeout(() => {
+                enableInlineRename(event.currentTarget, path, type);
+            }, 300);
         }
 
-        // Add function to select a folder
-        function selectFolder(folderPath) {
-            currentFolder = folderPath;
-            loadProjectFiles(); // Refresh to show selection
-            updateStatus(`Selected folder: ${folderPath}`);
+        // Separate single click handler for files
+        function handleFileClick(event, filepath) {
+            clearTimeout(renameTimeout);
+            renameTimeout = setTimeout(() => {
+                openFile(filepath);
+            }, 250);
         }
 
         // Get file icon based on extension
@@ -746,9 +1038,105 @@
                 'py': '🐍',
                 'ts': '📘',
                 'jsx': '⚛️',
-                'tsx': '⚛️'
+                'tsx': '⚛️',
+                'vue': '💚',
+                'go': '🐹',
+                'rs': '🦀',
+                'java': '☕',
+                'php': '🐘',
+                'rb': '💎',
+                'c': '🔷',
+                'cpp': '🔷',
+                'h': '🔷',
+                'cs': '🟦',
+                'swift': '🦉',
+                'kt': '🟪'
             };
             return icons[ext] || '📄';
+        }
+
+        // Get language mode for file
+        function getLanguageMode(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const languages = {
+                'js': 'javascript',
+                'json': 'json',
+                'html': 'html',
+                'css': 'css',
+                'md': 'markdown',
+                'py': 'python',
+                'ts': 'typescript',
+                'tsx': 'typescript',
+                'jsx': 'javascript',
+                'java': 'java',
+                'go': 'go',
+                'rs': 'rust',
+                'php': 'php',
+                'rb': 'ruby',
+                'c': 'c',
+                'cpp': 'cpp',
+                'h': 'c',
+                'cs': 'csharp',
+                'swift': 'swift',
+                'kt': 'kotlin',
+                'sql': 'sql',
+                'sh': 'shell',
+                'yml': 'yaml',
+                'yaml': 'yaml',
+                'xml': 'xml'
+            };
+            return languages[ext] || 'plaintext';
+        }
+
+        // Select folder
+        function selectFolder(folderPath, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            // If clicking the same folder, deselect it
+            if (currentFolder === folderPath) {
+                currentFolder = null;
+            } else {
+                currentFolder = folderPath;
+            }
+            
+            updateTreeControlsHint();
+            updateStatus(currentFolder ? `Selected folder: ${currentFolder}` : 'No folder selected');
+            
+            // Update visual selection
+            document.querySelectorAll('.tree-item.folder').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            if (currentFolder && event && event.currentTarget) {
+                event.currentTarget.classList.add('selected');
+            }
+        }
+
+        // Toggle folder
+        function toggleFolder(folderPath, event) {
+            event.stopPropagation();
+            
+            if (expandedFolders.has(folderPath)) {
+                expandedFolders.delete(folderPath);
+            } else {
+                expandedFolders.add(folderPath);
+            }
+            
+            loadProjectFiles();
+        }
+
+        // Update tree controls hint
+        function updateTreeControlsHint() {
+            const controls = document.getElementById('treeControls');
+            if (controls) {
+                if (currentFolder) {
+                    controls.setAttribute('data-hint', `📁 ${currentFolder}`);
+                } else {
+                    controls.setAttribute('data-hint', '📁 root');
+                }
+            }
         }
 
         // Open file
@@ -769,12 +1157,24 @@
                 document.getElementById('editor').value = data.content;
                 
                 updateTabs();
+                updateFileTree();
                 updateStatus(`Opened: ${filepath}`);
                 isDirty = false;
             } catch (error) {
                 console.error('Error opening file:', error);
                 updateStatus('Error opening file', true);
             }
+        }
+
+        // Update file tree to show selected file
+        function updateFileTree() {
+            document.querySelectorAll('.tree-item.file').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // This is a bit hacky but works for now
+            // In a real implementation, we'd store references to DOM elements
+            loadProjectFiles();
         }
 
         // Save current file
@@ -791,6 +1191,7 @@
                 
                 if (response.ok) {
                     isDirty = false;
+                    updateTabs();
                     updateStatus(`Saved: ${currentFile}`);
                 }
             } catch (error) {
@@ -807,29 +1208,33 @@
             openFiles.forEach((content, filepath) => {
                 const filename = filepath.split('/').pop();
                 const tab = document.createElement('div');
-                tab.className = `tab ${filepath === currentFile ? 'active' : ''}`;
-                tab.innerHTML = `<span onclick="openFile('${filepath}')">${filename}</span>
-                   <span class="tab-close" onclick="closeFile('${filepath}', event)">×</span>
-               `;
-               tabsContainer.appendChild(tab);
-           });
-       }
+                tab.className = `tab ${filepath === currentFile ? 'active' : ''} ${filepath === currentFile && isDirty ? 'dirty' : ''}`;
+                tab.innerHTML = `
+                    <span onclick="openFile('${filepath}')">${filename}</span>
+                    <span class="tab-close" onclick="closeFile('${filepath}', event)">×</span>
+                `;
+                tabsContainer.appendChild(tab);
+            });
+        }
 
-       // Close file
-       function closeFile(filepath, event) {
-           event.stopPropagation();
-           
-           if (filepath === currentFile && isDirty) {
-               if (!confirm('Save changes before closing?')) {
-                   return;
-               }
-               saveCurrentFile();
-           }
-           
-           openFiles.delete(filepath);
-           
-           if (filepath === currentFile) {
-               // Switch to another open file or clear editor
+        // Close file
+        function closeFile(filepath, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            if (filepath === currentFile && isDirty) {
+                if (!confirm('Save changes before closing?')) {
+                    // Don't save, just close
+                } else {
+                    saveCurrentFile();
+                }
+            }
+            
+            openFiles.delete(filepath);
+            
+            if (filepath === currentFile) {
+                // Switch to another open file or clear editor
                const remainingFiles = Array.from(openFiles.keys());
                if (remainingFiles.length > 0) {
                    openFile(remainingFiles[0]);
@@ -848,49 +1253,47 @@
            document.getElementById('newProjectName').focus();
        }
 
-        // Update showNewFileModal to be simpler
-        function showNewFileModal() {
-            if (!currentProject) {
-                alert('Please select a project first');
-                return;
-            }
-            
-            const modal = document.getElementById('newFileModal');
-            const input = document.getElementById('newFilePath');
-            
-            // Just show filename input, not the full path
-            input.value = '';
-            if (currentFolder) {
-                input.placeholder = 'Enter filename (e.g., component.js)';
-            } else {
-                input.placeholder = 'Enter filename or path (e.g., index.js or src/index.js)';
-            }
-            
-            modal.style.display = 'block';
-            input.focus();
-        }
+       function showNewFileModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           
+           const modal = document.getElementById('newFileModal');
+           const input = document.getElementById('newFilePath');
+           
+           // Just show filename input, not the full path
+           input.value = '';
+           if (currentFolder) {
+               input.placeholder = 'Enter filename (e.g., component.js)';
+           } else {
+               input.placeholder = 'Enter filename or path (e.g., index.js or src/index.js)';
+           }
+           
+           modal.style.display = 'block';
+           input.focus();
+       }
 
-       // Update showNewFolderModal to work with current folder context
-        function showNewFolderModal() {
-            if (!currentProject) {
-                alert('Please select a project first');
-                return;
-            }
-            
-            const modal = document.getElementById('newFolderModal');
-            const input = document.getElementById('newFolderPath');
-            
-            // Similar to file creation - just show folder name
-            input.value = '';
-            if (currentFolder) {
-                input.placeholder = 'Enter folder name (e.g., components)';
-            } else {
-                input.placeholder = 'Enter folder name or path (e.g., src or src/components)';
-            }
-            
-            modal.style.display = 'block';
-            input.focus();
-        }
+       function showNewFolderModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           
+           const modal = document.getElementById('newFolderModal');
+           const input = document.getElementById('newFolderPath');
+           
+           // Similar to file creation - just show folder name
+           input.value = '';
+           if (currentFolder) {
+               input.placeholder = 'Enter folder name (e.g., components)';
+           } else {
+               input.placeholder = 'Enter folder name or path (e.g., src or src/components)';
+           }
+           
+           modal.style.display = 'block';
+           input.focus();
+       }
 
        function closeModal(modalId) {
            document.getElementById(modalId).style.display = 'none';
@@ -927,127 +1330,94 @@
            }
        }
 
-       // Add this function before the createFile function
-        function getLanguageMode(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            const languages = {
-                'js': 'javascript',
-                'json': 'json',
-                'html': 'html',
-                'css': 'css',
-                'md': 'markdown',
-                'py': 'python',
-                'ts': 'typescript',
-                'tsx': 'typescript',
-                'jsx': 'javascript',
-                'java': 'java',
-                'go': 'go',
-                'rs': 'rust',
-                'php': 'php',
-                'rb': 'ruby',
-                'c': 'c',
-                'cpp': 'cpp',
-                'h': 'c',
-                'cs': 'csharp',
-                'swift': 'swift',
-                'kt': 'kotlin',
-                'sql': 'sql',
-                'sh': 'shell',
-                'yml': 'yaml',
-                'yaml': 'yaml',
-                'xml': 'xml'
-            };
-            return languages[ext] || 'plaintext';
-        }
+       // Create file
+       async function createFile() {
+           let filepath = document.getElementById('newFilePath').value.trim();
+           
+           if (!filepath) {
+               alert('File name is required');
+               return;
+           }
+           
+           // If we have a current folder selected and the filepath doesn't contain /, prepend the folder
+           if (currentFolder && !filepath.includes('/')) {
+               filepath = currentFolder + '/' + filepath;
+           }
+           
+           try {
+               const language = getLanguageMode(filepath);
+               const templates = {
+                   'javascript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                   'typescript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                   'html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Document</title>\n</head>\n<body>\n    \n</body>\n</html>`,
+                   'css': `/* ${filepath} */\n/* Created on ${new Date().toLocaleString()} */\n\n`,
+                   'python': `# ${filepath}\n# Created on ${new Date().toLocaleString()}\n\n`,
+                   'json': '{\n  \n}',
+                   'markdown': `# ${filepath.split('/').pop().replace('.md', '')}\n\nCreated on ${new Date().toLocaleString()}\n\n`
+               };
+               
+               const content = templates[language] || `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`;
+               
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ filepath, content })
+               });
+               
+               if (response.ok) {
+                   closeModal('newFileModal');
+                   await loadProjectFiles();
+                   openFile(filepath);
+                   updateStatus(`Created file: ${filepath}`);
+               }
+           } catch (error) {
+               console.error('Error creating file:', error);
+               updateStatus('Error creating file', true);
+           }
+       }
 
-       // Update createFile to handle the folder context
-        async function createFile() {
-            let filepath = document.getElementById('newFilePath').value.trim();
-            
-            if (!filepath) {
-                alert('File name is required');
-                return;
-            }
-            
-            // If we have a current folder selected and the filepath doesn't contain /, prepend the folder
-            if (currentFolder && !filepath.includes('/')) {
-                filepath = currentFolder + '/' + filepath;
-            }
-            
-            try {
-                const language = getLanguageMode(filepath);
-                const templates = {
-                    'javascript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
-                    'typescript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
-                    'html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Document</title>\n</head>\n<body>\n    \n</body>\n</html>`,
-                    'css': `/* ${filepath} */\n/* Created on ${new Date().toLocaleString()} */\n\n`,
-                    'python': `# ${filepath}\n# Created on ${new Date().toLocaleString()}\n\n`,
-                    'json': '{\n  \n}',
-                    'markdown': `# ${filepath.split('/').pop().replace('.md', '')}\n\nCreated on ${new Date().toLocaleString()}\n\n`
-                };
-                
-                const content = templates[language] || `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`;
-                
-                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filepath, content })
-                });
-                
-                if (response.ok) {
-                    closeModal('newFileModal');
-                    await loadProjectFiles();
-                    openFile(filepath);
-                    updateStatus(`Created file: ${filepath}`);
-                }
-            } catch (error) {
-                console.error('Error creating file:', error);
-                updateStatus('Error creating file', true);
-            }
-        }
-
-       // Update createFolder to handle current folder context
-        async function createFolder() {
-            let folderPath = document.getElementById('newFolderPath').value.trim();
-            
-            if (!folderPath) {
-                alert('Folder name is required');
-                return;
-            }
-            
-            // If we have a current folder selected and the path doesn't contain /, prepend the folder
-            if (currentFolder && !folderPath.includes('/')) {
-                folderPath = currentFolder + '/' + folderPath;
-            }
-            
-            console.log('Creating folder:', folderPath); // Debug log
-            
-            try {
-                const response = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ folderPath })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    closeModal('newFolderModal');
-                    
-                    // Add the new folder to expanded folders so it shows open
-                    expandedFolders.add(folderPath);
-                    
-                    await loadProjectFiles();
-                    updateStatus(`Created folder: ${folderPath}`);
-                } else {
-                    alert(`Error: ${data.error}`);
-                }
-            } catch (error) {
-                console.error('Error creating folder:', error);
-                updateStatus('Error creating folder', true);
-                alert(`Error creating folder: ${error.message}`);
-            }
-        }
+       // Create folder
+       async function createFolder() {
+           let folderPath = document.getElementById('newFolderPath').value.trim();
+           
+           if (!folderPath) {
+               alert('Folder name is required');
+               return;
+           }
+           
+           // If we have a current folder selected and the path doesn't contain /, prepend the folder
+           if (currentFolder && !folderPath.includes('/')) {
+               folderPath = currentFolder + '/' + folderPath;
+           }
+           
+           console.log('Creating folder:', folderPath); // Debug log
+           
+           try {
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ folderPath })
+               });
+               
+               const data = await response.json();
+               
+               if (response.ok) {
+                   closeModal('newFolderModal');
+                   
+                   // Add the new folder to expanded folders so it shows open
+                   expandedFolders.add(folderPath);
+                   
+                   await loadProjectFiles();
+                   updateStatus(`Created folder: ${folderPath}`);
+               } else {
+                   alert(`Error: ${data.error}`);
+               }
+           } catch (error) {
+               console.error('Error creating folder:', error);
+               updateStatus('Error creating folder', true);
+               alert(`Error creating folder: ${error.message}`);
+           }
+       }
 
        // Update status message
        function updateStatus(message, isError = false) {
@@ -1062,40 +1432,411 @@
            }
        }
 
-       // Keyboard shortcuts
-       document.addEventListener('keydown', (e) => {
-           // Ctrl/Cmd + S to save
-           if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+       // Drag and Drop Functions
+       function handleDragStart(e, path, type) {
+           draggedItem = e.target;
+           draggedItemPath = path;
+           draggedItemType = type;
+           e.target.style.opacity = '0.5';
+           e.dataTransfer.effectAllowed = 'move';
+       }
+
+       function handleDragEnd(e) {
+           e.target.style.opacity = '';
+           // Remove all drag-over classes
+           document.querySelectorAll('.drag-over').forEach(el => {
+               el.classList.remove('drag-over');
+           });
+       }
+
+       function handleDragOver(e) {
+           if (e.preventDefault) {
                e.preventDefault();
-               saveCurrentFile();
+           }
+           e.dataTransfer.dropEffect = 'move';
+           return false;
+       }
+
+       function handleDragEnter(e, targetPath) {
+           if (draggedItemPath === targetPath) return;
+           e.currentTarget.classList.add('drag-over');
+       }
+
+       function handleDragLeave(e) {
+           e.currentTarget.classList.remove('drag-over');
+       }
+
+       async function handleDrop(e, targetPath, targetType) {
+           if (e.stopPropagation) {
+               e.stopPropagation();
+           }
+           e.preventDefault();
+           
+           e.currentTarget.classList.remove('drag-over');
+           
+           // Don't drop on itself
+           if (draggedItemPath === targetPath) return;
+           
+           // Don't drop a folder into its own child
+           if (targetPath && draggedItemPath && targetPath.startsWith(draggedItemPath + '/')) {
+               updateStatus('Cannot move a folder into itself', true);
+               return;
            }
            
-           // Ctrl/Cmd + N for new file
-           if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-               e.preventDefault();
+           // Determine the new path
+           let newPath;
+           if (targetType === 'root' || targetPath === '') {
+               // Dropping in root
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = itemName;
+           } else if (targetType === 'folder') {
+               // Dropping into a folder
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = targetPath + '/' + itemName;
+           } else {
+               // Dropping next to a file (same directory)
+               const targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = targetDir ? targetDir + '/' + itemName : itemName;
+           }
+           
+           // Don't move if it's the same location
+           if (draggedItemPath === newPath) return;
+           
+           // Move the item
+           try {
+               await moveItem(draggedItemPath, newPath, draggedItemType);
+               updateStatus(`Moved ${draggedItemPath} to ${newPath || 'root'}`);
+               await loadProjectFiles();
+           } catch (error) {
+               console.error('Error moving item:', error);
+               updateStatus('Error moving item', true);
+           }
+           
+           return false;
+       }
+
+       // Move files/folders
+       async function moveItem(oldPath, newPath, type) {
+           if (type === 'file') {
+               // Get file content
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${oldPath}`);
+               const data = await response.json();
+               
+               // Create at new location
+               await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ filepath: newPath, content: data.content })
+               });
+               
+               // Delete from old location
+               await fetch(`${API_URL}/projects/${currentProject.id}/files/${oldPath}`, {
+                   method: 'DELETE'
+               });
+               
+               // Update open files if needed
+               if (openFiles.has(oldPath)) {
+                   const content = openFiles.get(oldPath);
+                   openFiles.delete(oldPath);
+                   openFiles.set(newPath, content);
+                   if (currentFile === oldPath) {
+                       currentFile = newPath;
+                   }
+               }
+           } else {
+               // For folders, we need to move all files inside
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+               const data = await response.json();
+               
+               // Find all files in this folder
+               const filesToMove = data.files.filter(file => 
+                   file.filepath.startsWith(oldPath + '/')
+               );
+               
+               // Move each file
+               for (const file of filesToMove) {
+                   const relativePath = file.filepath.substring(oldPath.length);
+                   const newFilePath = newPath + relativePath;
+                   
+                   const fileResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${file.filepath}`);
+                   const fileData = await fileResponse.json();
+                   
+                   await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ filepath: newFilePath, content: fileData.content })
+                   });
+                   
+                   await fetch(`${API_URL}/projects/${currentProject.id}/files/${file.filepath}`, {
+                       method: 'DELETE'
+                   });
+               }
+           }
+       }
+
+        // Update showContextMenu to store the element
+        function showContextMenu(event, path, type) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            contextMenuTarget = path;
+            contextMenuType = type;
+            
+            // Store the element that was right-clicked
+            window.lastContextElement = event.currentTarget;
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            
+            const x = event.pageX;
+            const y = event.pageY;
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            console.log('Context menu shown for:', path, type); // Debug
+        }
+
+        // Add this simple inline rename function
+        function startInlineRename() {
+            if (!contextMenuTarget || !window.lastContextElement) {
+                console.log('No target for rename');
+                return;
+            }
+            
+            const element = window.lastContextElement;
+            const nameSpan = element.querySelector('span:last-child');
+            const originalName = contextMenuTarget.split('/').pop();
+            
+            console.log('Starting rename for:', originalName);
+            
+            // Create input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = originalName;
+            input.style.cssText = 'background: #3c3c3c; border: 1px solid #007acc; color: #fff; padding: 2px;';
+            
+            // Replace text with input
+            nameSpan.textContent = '';
+            nameSpan.appendChild(input);
+            input.focus();
+            input.select();
+            
+            // Save on Enter
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const newName = input.value.trim();
+                    if (newName && newName !== originalName) {
+                        await performRename(contextMenuTarget, newName, contextMenuType);
+                    }
+                    nameSpan.textContent = originalName;
+                } else if (e.key === 'Escape') {
+                    nameSpan.textContent = originalName;
+                }
+            });
+            
+            // Save on blur
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    nameSpan.textContent = originalName;
+                }, 200);
+            });
+        }
+
+        // Update performRename in project.html
+        async function performRename(oldPath, newName, type) {
+            const basePath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+            const newPath = basePath ? basePath + '/' + newName : newName;
+            
+            console.log('Renaming:', oldPath, 'to', newPath, 'Type:', type);
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/rename`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        oldPath: oldPath, 
+                        newPath: newPath, 
+                        isFolder: type === 'folder' 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    updateStatus(`Renamed to ${newName}`);
+                    
+                    // Update open files if it was a file
+                    if (type === 'file' && openFiles.has(oldPath)) {
+                        const content = openFiles.get(oldPath);
+                        openFiles.delete(oldPath);
+                        openFiles.set(newPath, content);
+                        if (currentFile === oldPath) {
+                            currentFile = newPath;
+                            updateTabs();
+                        }
+                    }
+                    
+                    // Update folder references if it was a folder
+                    if (type === 'folder') {
+                        // Update expanded folders
+                        if (expandedFolders.has(oldPath)) {
+                            expandedFolders.delete(oldPath);
+                            expandedFolders.add(newPath);
+                        }
+                        
+                        // Update current folder if needed
+                        if (currentFolder === oldPath) {
+                            currentFolder = newPath;
+                            updateTreeControlsHint();
+                        }
+                        
+                        // Update any open files that were in this folder
+                        const filesToUpdate = [];
+                        openFiles.forEach((content, filepath) => {
+                            if (filepath.startsWith(oldPath + '/')) {
+                                filesToUpdate.push({ oldPath: filepath, newPath: filepath.replace(oldPath, newPath), content });
+                            }
+                        });
+                        
+                        filesToUpdate.forEach(({ oldPath, newPath, content }) => {
+                            openFiles.delete(oldPath);
+                            openFiles.set(newPath, content);
+                            if (currentFile === oldPath) {
+                                currentFile = newPath;
+                            }
+                        });
+                        
+                        if (filesToUpdate.length > 0) {
+                            updateTabs();
+                        }
+                    }
+                    
+                    await loadProjectFiles();
+                } else {
+                    console.error('Rename failed:', result);
+                    updateStatus('Rename failed: ' + (result.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                console.error('Error renaming:', error);
+                updateStatus('Error renaming: ' + error.message, true);
+            }
+        }
+
+        // Rename item
+        async function renameItem() {
+            if (!contextMenuTarget) return;
+            
+            const oldName = contextMenuTarget.split('/').pop();
+            const newName = prompt(`Rename ${contextMenuType}:`, oldName);
+            
+            if (!newName || newName === oldName) return;
+            
+            const basePath = contextMenuTarget.substring(0, contextMenuTarget.lastIndexOf('/'));
+            const newPath = basePath ? basePath + '/' + newName : newName;
+            
+            try {
+                await moveItem(contextMenuTarget, newPath, contextMenuType);
+                updateStatus(`Renamed ${oldName} to ${newName}`);
+                await loadProjectFiles();
+            } catch (error) {
+                console.error('Error renaming:', error);
+                updateStatus('Error renaming item', true);
+            }
+        }
+
+        // Delete item
+        async function deleteItem() {
+            if (!contextMenuTarget) return;
+            
+            const name = contextMenuTarget.split('/').pop();
+            if (!confirm(`Delete ${contextMenuType} "${name}"?`)) return;
+            
+            try {
+                if (contextMenuType === 'file') {
+                    await fetch(`${API_URL}/projects/${currentProject.id}/files/${contextMenuTarget}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    // Close file if it's open
+                    if (openFiles.has(contextMenuTarget)) {
+                        closeFile(contextMenuTarget);
+                    }
+                } else {
+                    // For folders, delete all files inside
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                    const data = await response.json();
+                    
+                    const filesToDelete = data.files.filter(file => 
+                        file.filepath === contextMenuTarget || 
+                        file.filepath.startsWith(contextMenuTarget + '/')
+                    );
+                    
+                    for (const file of filesToDelete) {
+                        await fetch(`${API_URL}/projects/${currentProject.id}/files/${file.filepath}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        if (openFiles.has(file.filepath)) {
+                            closeFile(file.filepath);
+                        }
+                    }
+                }
+                
+                updateStatus(`Deleted ${contextMenuTarget}`);
+                await loadProjectFiles();
+            } catch (error) {
+                console.error('Error deleting:', error);
+                updateStatus('Error deleting item', true);
+            }
+        }
+
+       // New file in specific folder
+       function newFileInFolder() {
+           if (contextMenuType === 'folder') {
+               currentFolder = contextMenuTarget;
+               updateTreeControlsHint();
                showNewFileModal();
            }
-       });
+       }
 
-       // Handle modal Enter key
-       document.querySelectorAll('.modal input').forEach(input => {
-           input.addEventListener('keypress', (e) => {
-               if (e.key === 'Enter') {
-                   const modal = input.closest('.modal');
-                   const primaryButton = modal.querySelector('.primary');
-                   primaryButton.click();
-               }
-           });
-       });
+       // New folder in specific folder  
+       function newFolderInFolder() {
+           if (contextMenuType === 'folder') {
+               currentFolder = contextMenuTarget;
+               updateTreeControlsHint();
+               showNewFolderModal();
+           }
+       }
 
-       // Click outside modal to close
-       document.querySelectorAll('.modal').forEach(modal => {
-           modal.addEventListener('click', (e) => {
-               if (e.target === modal) {
-                   modal.style.display = 'none';
-               }
-           });
-       });
+       // Add this temporary test function
+    function testInlineRename() {
+        // Set a test target
+        contextMenuTarget = 'test';
+        contextMenuType = 'folder';
+        
+        // Create a fake element
+        const testElement = document.createElement('div');
+        testElement.innerHTML = '<span></span><span></span><span>test</span>';
+        document.body.appendChild(testElement);
+        window.lastContextElement = testElement;
+        
+        // Try to rename
+        startInlineRename();
+        
+        // Check if input was created
+        setTimeout(() => {
+            const input = testElement.querySelector('input');
+            if (input) {
+                console.log('✅ Inline rename is working!');
+            } else {
+                console.log('❌ Inline rename failed');
+            }
+            document.body.removeChild(testElement);
+        }, 100);
+    }
+
+// Call it in console to test: testInlineRename()
    </script>
 </body>
 </html>
