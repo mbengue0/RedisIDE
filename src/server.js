@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const searchManager = require('./searchManager');
 const { connectRedis, getClient } = require('./redisClient');
 const projectManager = require('./projectManager');
 
@@ -301,6 +302,7 @@ async function startServer() {
         
         // Initialize project manager with the Redis client
         projectManager.init();
+        searchManager.init();
         
         app.listen(process.env.PORT || 3000, () => {
             console.log(`Server running on port ${process.env.PORT || 3000}`);
@@ -310,5 +312,53 @@ async function startServer() {
         process.exit(1);
     }
 }
+
+// Global search across all projects
+app.get('/api/search', async (req, res) => {
+    try {
+        const { q, limit = 20, offset = 0, highlight = true } = req.query;
+        
+        if (!q) {
+            return res.status(400).json({ error: 'Query parameter "q" is required' });
+        }
+
+        const results = await searchManager.searchCode(q, {
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            highlight: highlight === 'true'
+        });
+
+        res.json(results);
+    } catch (error) {
+        console.error('Error searching:', error);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// Search within a specific project
+app.get('/api/projects/:projectId/search', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { q, limit = 20, offset = 0, highlight = true, extensions } = req.query;
+        
+        if (!q) {
+            return res.status(400).json({ error: 'Query parameter "q" is required' });
+        }
+
+        const extensionFilter = extensions ? extensions.split(',') : null;
+
+        const results = await searchManager.searchInProject(projectId, q, {
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            highlight: highlight === 'true',
+            extensions: extensionFilter
+        });
+
+        res.json(results);
+    } catch (error) {
+        console.error('Error searching in project:', error);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
 
 startServer();
