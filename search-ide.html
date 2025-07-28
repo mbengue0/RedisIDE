@@ -642,9 +642,7 @@
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
     
     <script>
-        // Copy ALL variables and base functions from monaco-ide.html
         const API_URL = 'http://localhost:3000/api';
-        let searchResults = [];
         let currentProject = null;
         let openFiles = new Map(); // filepath -> {content, model, viewState, dirty}
         let currentFile = null;
@@ -661,6 +659,7 @@
         let draggedItemPath = null;
         let draggedItemType = null;
         let undoTimeout = null;
+        let searchResults = [];
 
         // Configure Monaco loader
         require.config({ 
@@ -776,7 +775,14 @@
             createProjectDropdown();
         }
 
-        // Monaco-specific functions
+        // Add find/replace support
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+                editor.getAction('actions.find').run();
+            });
+            
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+                editor.getAction('editor.action.startFindReplaceAction').run();
+            });
         
         // Open file with Monaco
         async function openFile(filepath) {
@@ -1114,6 +1120,106 @@
                     }
                 }
             });
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+Shift+F for global search
+                if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+                    e.preventDefault();
+                    document.getElementById('searchInput').focus();
+                }
+            });
+        }
+        
+        // Search functionality
+        function handleSearchKeypress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+            
+            const searchCurrentProject = document.getElementById('searchCurrentProject').checked;
+            
+            updateStatus('Searching...');
+            document.getElementById('searchStatus').textContent = '🔍 Searching...';
+            
+            try {
+                const url = searchCurrentProject && currentProject
+                    ? `${API_URL}/projects/${currentProject.id}/search`
+                    : `${API_URL}/search`;
+                
+                const response = await fetch(`${url}?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                
+                searchResults = results.documents || [];
+                displaySearchResults(results);
+                
+                const statusText = results.fallback 
+                    ? `Found ${results.total} results (fallback search)`
+                    : `Found ${results.total} results`;
+                
+                updateStatus(statusText);
+                document.getElementById('searchStatus').textContent = '';
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                updateStatus('Search failed', true);
+                document.getElementById('searchStatus').textContent = '';
+            }
+        }
+        
+        function displaySearchResults(results) {
+            const panel = document.getElementById('searchResultsPanel');
+            const list = document.getElementById('searchResultsList');
+            const count = document.getElementById('searchResultsCount');
+            
+            if (results.total === 0) {
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No results found</div>';
+            } else {
+                list.innerHTML = results.documents.map((doc, index) => `
+                    <div class="search-result-item" onclick="openSearchResult(${index})">
+                        <div class="search-result-file">${doc.filepath}</div>
+                        <div class="search-result-content">${doc.content || doc.snippet || ''}</div>
+                    </div>
+                `).join('');
+            }
+            
+            count.textContent = `${results.total} result${results.total !== 1 ? 's' : ''} for "${results.query}"`;
+            panel.style.display = 'block';
+        }
+        
+        function closeSearchResults() {
+            document.getElementById('searchResultsPanel').style.display = 'none';
+        }
+        
+        async function openSearchResult(index) {
+            const result = searchResults[index];
+            if (!result) return;
+            
+            // Extract project ID from the result
+            const projectId = result.projectId || result.key.split(':')[1];
+            
+            // If it's from a different project, load that project first
+            if (projectId !== currentProject?.id) {
+                await loadProject(projectId);
+            }
+            
+            // Open the file
+            await openFile(result.filepath);
+            
+            // Try to jump to the search term in the file
+            const searchTerm = document.getElementById('searchInput').value;
+            if (searchTerm && editor) {
+                const model = editor.getModel();
+                const matches = model.findMatches(searchTerm, true, false, false, null, true);
+                
+                if (matches.length > 0) {
+                    editor.setSelection(matches[0].range);
+                    editor.revealRangeInCenter(matches[0].range);
+                }
+            }
         }
 
         // Also update smartDelete to use the same undo functionality
@@ -2247,129 +2353,6 @@
                showNewFolderModal();
            }
        }
-        // Add to keyboard shortcuts
-        function setupKeyboardShortcuts() {
-            // ... existing keyboard shortcuts ...
-            
-            // Add search shortcut
-            document.addEventListener('keydown', (e) => {
-                // Ctrl+Shift+F for global search
-                if (e.ctrlKey && e.shiftKey && e.key === 'F') {
-                    e.preventDefault();
-                    document.getElementById('searchInput').focus();
-                }
-            });
-        }
-        
-        // Search functionality
-        function handleSearchKeypress(event) {
-            if (event.key === 'Enter') {
-                performSearch();
-            }
-        }
-        
-        async function performSearch() {
-            const query = document.getElementById('searchInput').value.trim();
-            if (!query) return;
-            
-            const searchCurrentProject = document.getElementById('searchCurrentProject').checked;
-            
-            updateStatus('Searching...');
-            document.getElementById('searchStatus').textContent = '🔍 Searching...';
-            
-            try {
-                const url = searchCurrentProject && currentProject
-                    ? `${API_URL}/projects/${currentProject.id}/search`
-                    : `${API_URL}/search`;
-                
-                const response = await fetch(`${url}?q=${encodeURIComponent(query)}`);
-                const results = await response.json();
-                
-                searchResults = results.documents || [];
-                displaySearchResults(results);
-                
-                const statusText = results.fallback 
-                    ? `Found ${results.total} results (fallback search)`
-                    : `Found ${results.total} results`;
-                
-                updateStatus(statusText);
-                document.getElementById('searchStatus').textContent = '';
-                
-            } catch (error) {
-                console.error('Search error:', error);
-                updateStatus('Search failed', true);
-                document.getElementById('searchStatus').textContent = '';
-            }
-        }
-        
-        function displaySearchResults(results) {
-            const panel = document.getElementById('searchResultsPanel');
-            const list = document.getElementById('searchResultsList');
-            const count = document.getElementById('searchResultsCount');
-            
-            if (results.total === 0) {
-                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No results found</div>';
-            } else {
-                list.innerHTML = results.documents.map((doc, index) => `
-                    <div class="search-result-item" onclick="openSearchResult(${index})">
-                        <div class="search-result-file">${doc.filepath}</div>
-                        <div class="search-result-content">${doc.content || doc.snippet || ''}</div>
-                    </div>
-                `).join('');
-            }
-            
-            count.textContent = `${results.total} result${results.total !== 1 ? 's' : ''} for "${results.query}"`;
-            panel.style.display = 'block';
-        }
-        
-        function closeSearchResults() {
-            document.getElementById('searchResultsPanel').style.display = 'none';
-        }
-        
-        async function openSearchResult(index) {
-            const result = searchResults[index];
-            if (!result) return;
-            
-            // Extract project ID from the result
-            const projectId = result.projectId || result.key.split(':')[1];
-            
-            // If it's from a different project, load that project first
-            if (projectId !== currentProject?.id) {
-                await loadProject(projectId);
-            }
-            
-            // Open the file
-            await openFile(result.filepath);
-            
-            // Try to jump to the search term in the file
-            const searchTerm = document.getElementById('searchInput').value;
-            if (searchTerm && editor) {
-                const model = editor.getModel();
-                const matches = model.findMatches(searchTerm, true, false, false, null, true);
-                
-                if (matches.length > 0) {
-                    editor.setSelection(matches[0].range);
-                    editor.revealRangeInCenter(matches[0].range);
-                }
-            }
-        }
-        
-        // Add Monaco search integration
-        function initializeEditor() {
-            // ... existing Monaco initialization ...
-            
-            // Add find/replace support
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
-                editor.getAction('actions.find').run();
-            });
-            
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
-                editor.getAction('editor.action.startFindReplaceAction').run();
-            });
-        }
-        
-        // Copy ALL other functions from monaco-ide.html
-
     </script>
 </body>
 </html>
