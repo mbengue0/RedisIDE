@@ -304,6 +304,11 @@ async function startServer() {
         projectManager.init();
         searchManager.init();
         
+        // Create search index
+        await searchManager.createSearchIndex();
+        
+        // Optional: reindex existing files
+        await searchManager.reindexAllFiles();
         app.listen(process.env.PORT || 3000, () => {
             console.log(`Server running on port ${process.env.PORT || 3000}`);
         });
