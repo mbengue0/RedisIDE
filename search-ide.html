@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis IDE - Search Edition</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .ide-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .project-selector {
+            width: 100%;
+            padding: 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .new-project-btn {
+            width: 100%;
+            padding: 8px;
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .new-project-btn:hover {
+            background-color: #1177bb;
+        }
+        
+        /* File Tree */
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            min-height: 100px;
+            position: relative;
+        }
+        
+        .file-tree.drag-over {
+            background-color: rgba(0, 122, 204, 0.1);
+            outline: 2px dashed #007acc;
+        }
+        
+        .tree-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 3px;
+            font-size: 13px;
+            user-select: none;
+            transition: padding-left 0.2s ease;
+        }
+        
+        .tree-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .tree-item.selected {
+            background-color: #094771;
+        }
+        
+        .tree-item.folder.selected {
+            background-color: #37373d;
+        }
+        
+        .tree-item.drag-over {
+            background-color: #007acc !important;
+            outline: 2px solid #007acc;
+        }
+        
+        .tree-item[draggable="true"] {
+            cursor: move;
+        }
+        
+        .folder-arrow {
+            width: 12px;
+            font-size: 10px;
+            color: #cccccc;
+            cursor: pointer;
+            user-select: none;
+            display: inline-block;
+        }
+        
+        .folder-arrow:hover {
+            color: #ffffff;
+        }
+        
+        .tree-controls {
+            padding: 10px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 5px;
+            position: relative;
+        }
+        
+        .tree-controls::before {
+            content: attr(data-hint);
+            display: block;
+            position: absolute;
+            top: -20px;
+            left: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+        
+        .tree-controls button {
+            flex: 1;
+            padding: 6px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .tree-controls button:hover {
+            background-color: #484848;
+        }
+        
+        /* Editor Area */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-tabs {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            height: 35px;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 0 20px;
+            background-color: #2d2d30;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            min-width: 120px;
+        }
+        
+        .tab:hover {
+            background-color: #353537;
+        }
+        
+        .tab.active {
+            background-color: #1e1e1e;
+        }
+        
+        .tab-close {
+            margin-left: auto;
+            font-size: 16px;
+            color: #888;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        
+        .tab-close:hover {
+            color: #fff;
+        }
+        
+        .tab.dirty::after {
+            content: '•';
+            color: #fff;
+            margin-left: 5px;
+            font-size: 20px;
+            line-height: 0;
+        }
+        
+        #monaco-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            height: 22px;
+            background-color: #007acc;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+        
+        .status-message {
+            margin-right: auto;
+        }
+        
+        .status-right {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            min-width: 400px;
+        }
+        
+        .modal-header {
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .modal input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .modal button {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .modal .primary {
+            background-color: #0e639c;
+            color: white;
+        }
+        
+        .modal .secondary {
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+        }
+        
+        /* Loading indicator */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #888;
+            font-size: 14px;
+        }
+        
+        /* Context Menu */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 4px 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            min-width: 150px;
+        }
+        
+        .context-menu-item {
+            padding: 6px 20px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #094771;
+        }
+        
+        .context-menu-separator {
+            height: 1px;
+            background-color: #3e3e42;
+            margin: 4px 0;
+        }
+        
+        /* Undo notification */
+        .undo-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #323233;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .undo-button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .undo-button:hover {
+            background-color: #1177bb;
+        }
+        /* Search Box */
+        .search-container {
+            padding: 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 6px 30px 6px 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 8px;
+            color: #888;
+            cursor: pointer;
+        }
+        
+        .search-filters {
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .search-filters label {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        .search-filters input[type="checkbox"] {
+            margin-right: 4px;
+        }
+        
+        /* Search Results Panel */
+        .search-results-panel {
+            display: none;
+            height: 200px;
+            background-color: #252526;
+            border-bottom: 1px solid #3e3e42;
+            overflow-y: auto;
+            resize: vertical;
+        }
+        
+        .search-results-header {
+            padding: 8px 15px;
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .search-result-item {
+            padding: 8px 15px;
+            border-bottom: 1px solid #3e3e42;
+            cursor: pointer;
+        }
+        
+        .search-result-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .search-result-file {
+            color: #4ec9b0;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .search-result-content {
+            font-size: 12px;
+            color: #cccccc;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', monospace;
+            line-height: 1.4;
+        }
+        
+        .search-result-content mark {
+            background-color: #515c6a;
+            color: #ffffff;
+            font-weight: bold;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+        
+        /* Search status in status bar */
+        .search-status {
+            margin-right: 20px;
+            color: #cccccc;
+        }
+        
+        /* Make editor area flex to accommodate search panel */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="ide-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <select id="projectSelector" class="project-selector">
+                    <option value="">Select a project...</option>
+                </select>
+                <button class="new-project-btn" onclick="showNewProjectModal()">+ New Project</button>
+            </div>
+            
+            <!-- Search Box -->
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input" 
+                           placeholder="Search in project... (Ctrl+Shift+F)"
+                           onkeypress="handleSearchKeypress(event)">
+                    <span class="search-icon" onclick="performSearch()">🔍</span>
+                </div>
+                <div class="search-filters">
+                    <label>
+                        <input type="checkbox" id="searchCurrentProject" checked>
+                        Current project only
+                    </label>
+                </div>
+            </div>
+            
+            <div class="file-tree" id="fileTree">
+                <div style="padding: 20px; text-align: center; color: #888;">
+                    Select or create a project
+                </div>
+            </div>
+            
+            <div class="tree-controls" id="treeControls" data-hint="📁 root">
+                <button onclick="showNewFileModal()">📄 New File</button>
+                <button onclick="showNewFolderModal()">📁 New Folder</button>
+            </div>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Search Results Panel -->
+            <div id="searchResultsPanel" class="search-results-panel">
+                <div class="search-results-header">
+                    <span id="searchResultsCount">0 results</span>
+                    <span style="cursor: pointer;" onclick="closeSearchResults()">✕</span>
+                </div>
+                <div id="searchResultsList"></div>
+            </div>
+            
+            <!-- Editor Area -->
+            <div class="editor-area">
+                <div class="editor-tabs" id="editorTabs">
+                    <!-- Tabs will be added dynamically -->
+                </div>
+                
+                <div id="monaco-container">
+                    <div class="loading" id="loading">Loading Monaco Editor...</div>
+                </div>
+                
+                <div class="status-bar">
+                    <span class="status-message" id="statusMessage">Ready</span>
+                    <span class="search-status" id="searchStatus"></span>
+                    <div class="status-right">
+                        <span id="cursorPosition">Ln 1, Col 1</span>
+                        <span id="languageMode">JavaScript</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Copy ALL modals and context menu from monaco-ide.html -->
+    
+    <!-- Load dependencies -->
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    
+    <script>
+        // Copy ALL variables and base functions from monaco-ide.html
+        // Then ADD these search-specific additions:
+        
+        let searchResults = [];
+        
+        // Add to keyboard shortcuts
+        function setupKeyboardShortcuts() {
+            // ... existing keyboard shortcuts ...
+            
+            // Add search shortcut
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+Shift+F for global search
+                if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+                    e.preventDefault();
+                    document.getElementById('searchInput').focus();
+                }
+            });
+        }
+        
+        // Search functionality
+        function handleSearchKeypress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+        
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+            
+            const searchCurrentProject = document.getElementById('searchCurrentProject').checked;
+            
+            updateStatus('Searching...');
+            document.getElementById('searchStatus').textContent = '🔍 Searching...';
+            
+            try {
+                const url = searchCurrentProject && currentProject
+                    ? `${API_URL}/projects/${currentProject.id}/search`
+                    : `${API_URL}/search`;
+                
+                const response = await fetch(`${url}?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                
+                searchResults = results.documents || [];
+                displaySearchResults(results);
+                
+                const statusText = results.fallback 
+                    ? `Found ${results.total} results (fallback search)`
+                    : `Found ${results.total} results`;
+                
+                updateStatus(statusText);
+                document.getElementById('searchStatus').textContent = '';
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                updateStatus('Search failed', true);
+                document.getElementById('searchStatus').textContent = '';
+            }
+        }
+        
+        function displaySearchResults(results) {
+            const panel = document.getElementById('searchResultsPanel');
+            const list = document.getElementById('searchResultsList');
+            const count = document.getElementById('searchResultsCount');
+            
+            if (results.total === 0) {
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No results found</div>';
+            } else {
+                list.innerHTML = results.documents.map((doc, index) => `
+                    <div class="search-result-item" onclick="openSearchResult(${index})">
+                        <div class="search-result-file">${doc.filepath}</div>
+                        <div class="search-result-content">${doc.content || doc.snippet || ''}</div>
+                    </div>
+                `).join('');
+            }
+            
+            count.textContent = `${results.total} result${results.total !== 1 ? 's' : ''} for "${results.query}"`;
+            panel.style.display = 'block';
+        }
+        
+        function closeSearchResults() {
+            document.getElementById('searchResultsPanel').style.display = 'none';
+        }
+        
+        async function openSearchResult(index) {
+            const result = searchResults[index];
+            if (!result) return;
+            
+            // Extract project ID from the result
+            const projectId = result.projectId || result.key.split(':')[1];
+            
+            // If it's from a different project, load that project first
+            if (projectId !== currentProject?.id) {
+                await loadProject(projectId);
+            }
+            
+            // Open the file
+            await openFile(result.filepath);
+            
+            // Try to jump to the search term in the file
+            const searchTerm = document.getElementById('searchInput').value;
+            if (searchTerm && editor) {
+                const model = editor.getModel();
+                const matches = model.findMatches(searchTerm, true, false, false, null, true);
+                
+                if (matches.length > 0) {
+                    editor.setSelection(matches[0].range);
+                    editor.revealRangeInCenter(matches[0].range);
+                }
+            }
+        }
+        
+        // Add Monaco search integration
+        function initializeEditor() {
+            // ... existing Monaco initialization ...
+            
+            // Add find/replace support
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+                editor.getAction('actions.find').run();
+            });
+            
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+                editor.getAction('editor.action.startFindReplaceAction').run();
+            });
+        }
+        
+        // Copy ALL other functions from monaco-ide.html
+
+    </script>
+</body>
+</html>
