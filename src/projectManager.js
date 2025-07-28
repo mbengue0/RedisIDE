@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { getClient } = require('./redisClient');
+const searchManager = require('./searchManager');
 
 class ProjectManager {
     constructor() {
@@ -83,6 +84,8 @@ class ProjectManager {
             updatedAt: new Date().toISOString(),
             size: Buffer.byteLength(content, 'utf8')
         });
+
+        await searchManager.indexFile(projectId, filepath, content);
 
         try {
             const project = await this.getProject(projectId);
@@ -175,6 +178,8 @@ class ProjectManager {
             updatedAt: new Date().toISOString(),
             size: Buffer.byteLength(content, 'utf8')
         });
+
+        await searchManager.indexFile(projectId, filepath, content);
 
         try {
             const project = await this.getProject(projectId);
