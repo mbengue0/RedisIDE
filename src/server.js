@@ -2,11 +2,27 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const searchManager = require('./searchManager');
+const http = require('http');
+const socketIO = require('socket.io');
 const { connectRedis, getClient } = require('./redisClient');
 const projectManager = require('./projectManager');
+const searchManager = require('./searchManager');
 
+// Create Express app FIRST
 const app = express();
+
+// Then create HTTP server with the app
+const server = http.createServer(app);
+
+// Then create Socket.IO instance
+const io = socketIO(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Apply middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));
@@ -14,6 +30,85 @@ app.use(express.static(path.join(__dirname, '..')));
 // Initialize Redis connection
 let redisClient;
 
+// Collaboration state
+const sessions = new Map();
+const activeUsers = new Map();
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('New collaboration connection:', socket.id);
+    
+    const { sessionId, userId, userName, userColor } = socket.handshake.query;
+    
+    // Store user info
+    const user = { id: userId, name: userName, color: userColor, socketId: socket.id };
+    activeUsers.set(socket.id, user);
+    
+    socket.on('join-project', (data) => {
+        const room = `project-${data.projectId}`;
+        socket.join(room);
+        
+        // Notify others in the project
+        socket.to(room).emit('user-joined', { user: data.user });
+        
+        // Send current users in the room
+        const roomUsers = [];
+        io.sockets.adapter.rooms.get(room)?.forEach(socketId => {
+            const user = activeUsers.get(socketId);
+            if (user) roomUsers.push(user);
+        });
+        
+        socket.emit('active-users', { users: roomUsers });
+    });
+    
+    socket.on('code-change', (data) => {
+        const room = `project-${data.projectId}`;
+        socket.to(room).emit('code-change', {
+            ...data,
+            userId: userId,
+            userName: userName
+        });
+    });
+    
+    socket.on('cursor-change', (data) => {
+        const room = `project-${data.projectId}`;
+        socket.to(room).emit('cursor-change', {
+            ...data,
+            userId: userId
+        });
+    });
+    
+    socket.on('file-created', (data) => {
+        const room = `project-${data.projectId}`;
+        socket.to(room).emit('file-created', {
+            ...data,
+            userId: userId,
+            userName: userName
+        });
+    });
+    
+    socket.on('file-deleted', (data) => {
+        const room = `project-${data.projectId}`;
+        socket.to(room).emit('file-deleted', {
+            ...data,
+            userId: userId,
+            userName: userName
+        });
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+        
+        // Notify all rooms this user was in
+        socket.rooms.forEach(room => {
+            if (room !== socket.id) {
+                socket.to(room).emit('user-left', { userId: userId });
+            }
+        });
+        
+        activeUsers.delete(socket.id);
+    });
+});
 // Project endpoints
 // Create new project
 app.post('/api/projects', async (req, res) => {
@@ -309,7 +404,7 @@ async function startServer() {
         
         // Optional: reindex existing files
         await searchManager.reindexAllFiles();
-        app.listen(process.env.PORT || 3000, () => {
+        server.listen(process.env.PORT || 3000, () => {
             console.log(`Server running on port ${process.env.PORT || 3000}`);
         });
     } catch (error) {
