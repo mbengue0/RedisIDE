@@ -1016,6 +1016,193 @@
         .ai-panel-open .active-users {
             top: 60px !important;
         }
+
+        /* Terminal Styles */
+        .terminal-container {
+            position: fixed;
+            bottom: 22px; /* Above status bar */
+            left: 0;
+            right: 0;
+            height: 200px;
+            background-color: #1e1e1e;
+            border-top: 1px solid #3e3e42;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .terminal-container.active {
+            display: flex;
+        }
+
+        .terminal-resize-handle {
+            position: absolute;
+            top: -3px;
+            left: 0;
+            right: 0;
+            height: 6px;
+            cursor: row-resize;
+            background: transparent;
+        }
+
+        .terminal-resize-handle:hover {
+            background: #007acc;
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            height: 35px;
+            padding: 0 10px;
+        }
+
+        .terminal-tabs {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .terminal-tab {
+            padding: 5px 15px;
+            background-color: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-bottom: none;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .terminal-tab.active {
+            background-color: #1e1e1e;
+            border-top: 2px solid #007acc;
+        }
+
+        .terminal-close {
+            color: #888;
+            cursor: pointer;
+        }
+
+        .terminal-close:hover {
+            color: #fff;
+        }
+
+        .new-terminal-btn {
+            padding: 2px 8px;
+            background: transparent;
+            border: 1px solid #3e3e42;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .new-terminal-btn:hover {
+            background: #3e3e42;
+            color: #fff;
+        }
+
+        .terminal-actions button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 14px;
+        }
+
+        .terminal-actions button:hover {
+            color: #fff;
+        }
+
+        .terminal-body {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .terminal-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 10px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            display: none;
+        }
+
+        .terminal-content.active {
+            display: block;
+        }
+
+        .terminal-line {
+            margin: 2px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .terminal-prompt {
+            color: #4ec9b0;
+        }
+
+        .terminal-command {
+            color: #ffffff;
+        }
+
+        .terminal-output {
+            color: #cccccc;
+        }
+
+        .terminal-error {
+            color: #f48771;
+        }
+
+        .terminal-success {
+            color: #4ec9b0;
+        }
+
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+        }
+
+        .terminal-input {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            outline: none;
+            flex: 1;
+            font-family: inherit;
+            font-size: inherit;
+            margin-left: 5px;
+        }
+
+    /* Adjust editor when terminal is open */
+    .editor-area.terminal-open {
+        margin-bottom: 200px;
+    }
+
+    /* Terminal toggle button in status bar */
+    .terminal-toggle {
+        margin-left: auto;
+        margin-right: 10px;
+        cursor: pointer;
+        padding: 2px 8px;
+        background: #3c3c3c;
+        border: 1px solid #3e3e42;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+
+    .terminal-toggle:hover {
+        background: #484848;
+    }
     </style>
 </head>
 <body>
@@ -1241,7 +1428,26 @@
             <button class="ai-send-btn" id="aiSendBtn" onclick="sendAIMessage()">Send</button>
         </div>
     </div>
-    
+    <!-- Terminal Panel -->
+    <div class="terminal-container" id="terminalContainer">
+        <div class="terminal-resize-handle" id="terminalResizeHandle"></div>
+        <div class="terminal-header">
+            <div class="terminal-tabs">
+                <div class="terminal-tab active">
+                    <span>bash</span>
+                    <span class="terminal-close" onclick="closeTerminal(0)">×</span>
+                </div>
+                <button class="new-terminal-btn" onclick="createNewTerminal()">+</button>
+            </div>
+            <div class="terminal-actions">
+                <button onclick="clearTerminal()" title="Clear">🗑️</button>
+                <button onclick="toggleTerminal()" title="Close">▼</button>
+            </div>
+        </div>
+        <div class="terminal-body" id="terminalBody">
+            <div class="terminal-content active" id="terminal-0"></div>
+        </div>
+    </div>
     <!-- Scripts -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
@@ -1347,6 +1553,392 @@
             }
         }
 
+        // Terminal System
+        class Terminal {
+            constructor() {
+                this.terminals = new Map();
+                this.activeTerminal = 0;
+                this.history = [];
+                this.historyIndex = 0;
+                this.isResizing = false;
+            }
+
+            init() {
+                this.createTerminal(0);
+                this.setupResize();
+                this.addToggleButton();
+                
+                // Keyboard shortcut (Ctrl+`)
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === '`') {
+                        e.preventDefault();
+                        this.toggle();
+                    }
+                });
+            }
+
+            addToggleButton() {
+                const statusBar = document.querySelector('.status-bar');
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'terminal-toggle';
+                toggleBtn.textContent = 'Terminal';
+                toggleBtn.onclick = () => this.toggle();
+                statusBar.insertBefore(toggleBtn, statusBar.querySelector('.status-right'));
+            }
+
+            createTerminal(id) {
+                const terminal = {
+                    id: id,
+                    cwd: currentProject ? currentProject.name : '~',
+                    output: [],
+                    commandHistory: []
+                };
+                
+                this.terminals.set(id, terminal);
+                this.writePrompt(id);
+            }
+
+            toggle() {
+                const container = document.getElementById('terminalContainer');
+                const editorArea = document.querySelector('.editor-area');
+                
+                container.classList.toggle('active');
+                editorArea.classList.toggle('terminal-open');
+                
+                if (container.classList.contains('active')) {
+                    this.focusInput();
+                    // Resize Monaco
+                    if (window.editor) {
+                        setTimeout(() => editor.layout(), 100);
+                    }
+                }
+            }
+
+            focusInput() {
+                const activeTerminal = document.querySelector('.terminal-content.active');
+                const input = activeTerminal?.querySelector('.terminal-input');
+                if (input) input.focus();
+            }
+
+            writePrompt(terminalId) {
+                const terminal = this.terminals.get(terminalId);
+                const content = document.getElementById(`terminal-${terminalId}`);
+                
+                const promptLine = document.createElement('div');
+                promptLine.className = 'terminal-line terminal-input-line';
+                promptLine.innerHTML = `
+                    <span class="terminal-prompt">${terminal.cwd} $</span>
+                    <input class="terminal-input" type="text" autocomplete="off" spellcheck="false">
+                `;
+                
+                content.appendChild(promptLine);
+                
+                const input = promptLine.querySelector('.terminal-input');
+                input.addEventListener('keydown', (e) => this.handleInput(e, terminalId));
+                input.focus();
+                
+                // Scroll to bottom
+                content.scrollTop = content.scrollHeight;
+            }
+
+            handleInput(e, terminalId) {
+                const input = e.target;
+                const terminal = this.terminals.get(terminalId);
+                
+                if (e.key === 'Enter') {
+                    const command = input.value.trim();
+                    if (command) {
+                        terminal.commandHistory.push(command);
+                        this.executeCommand(command, terminalId);
+                    }
+                    
+                    // Disable input
+                    input.disabled = true;
+                    input.parentElement.querySelector('.terminal-prompt').textContent += ` ${command}`;
+                    
+                    // Create new prompt
+                    this.writePrompt(terminalId);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (terminal.commandHistory.length > 0 && this.historyIndex > 0) {
+                        this.historyIndex--;
+                        input.value = terminal.commandHistory[this.historyIndex];
+                    }
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (this.historyIndex < terminal.commandHistory.length - 1) {
+                        this.historyIndex++;
+                        input.value = terminal.commandHistory[this.historyIndex];
+                    } else {
+                        this.historyIndex = terminal.commandHistory.length;
+                        input.value = '';
+                    }
+                }
+            }
+
+            async executeCommand(command, terminalId) {
+                const args = command.split(' ');
+                const cmd = args[0];
+                
+                // Built-in commands
+                switch (cmd) {
+                    case 'clear':
+                        this.clearTerminal();
+                        break;
+                    
+                    case 'help':
+                        this.writeOutput(terminalId, `Available commands:
+        clear     - Clear terminal
+        ls        - List files
+        cd        - Change directory
+        node      - Run JavaScript file
+        redis-cli - Connect to Redis
+        npm       - Package manager
+        git       - Version control`, 'success');
+                        break;
+                    
+                    case 'ls':
+                        this.listFiles(terminalId);
+                        break;
+                    
+                    case 'cd':
+                        this.changeDirectory(terminalId, args[1]);
+                        break;
+                    
+                    case 'node':
+                        if (args[1]) {
+                            await this.runNode(terminalId, args[1]);
+                        } else {
+                            this.writeOutput(terminalId, 'Usage: node <filename>', 'error');
+                        }
+                        break;
+                    
+                    case 'redis-cli':
+                        this.connectRedis(terminalId);
+                        break;
+                    
+                    case 'npm':
+                        this.runNpm(terminalId, args.slice(1));
+                        break;
+                    
+                    case 'git':
+                        this.runGit(terminalId, args.slice(1));
+                        break;
+                    
+                    default:
+                        this.writeOutput(terminalId, `Command not found: ${cmd}`, 'error');
+                }
+            }
+
+            writeOutput(terminalId, text, type = 'output') {
+                const content = document.getElementById(`terminal-${terminalId}`);
+                const outputLine = document.createElement('div');
+                outputLine.className = `terminal-line terminal-${type}`;
+                outputLine.textContent = text;
+                
+                // Insert before the last prompt
+                const lastPrompt = content.querySelector('.terminal-input-line:last-child');
+                content.insertBefore(outputLine, lastPrompt);
+                
+                // Scroll to bottom
+                content.scrollTop = content.scrollHeight;
+            }
+
+            clearTerminal() {
+                const content = document.querySelector('.terminal-content.active');
+                content.innerHTML = '';
+                this.writePrompt(this.activeTerminal);
+            }
+
+            listFiles(terminalId) {
+                if (!currentProject) {
+                    this.writeOutput(terminalId, 'No project selected', 'error');
+                    return;
+                }
+                
+                // Get files from current directory
+                const terminal = this.terminals.get(terminalId);
+                const cwd = terminal.cwd;
+                
+                // Mock file listing (in real app, fetch from backend)
+                const files = ['src/', 'node_modules/', 'package.json', 'README.md'];
+                this.writeOutput(terminalId, files.join('  '), 'output');
+            }
+
+            async runNode(terminalId, filename) {
+                if (!currentFile || !editor) {
+                    this.writeOutput(terminalId, 'No file open in editor', 'error');
+                    return;
+                }
+                
+                this.writeOutput(terminalId, `Running ${filename}...`, 'success');
+                
+                try {
+                    // Get code from editor
+                    const code = editor.getValue();
+                    
+                    // Create a sandboxed environment
+                    const sandbox = {
+                        console: {
+                            log: (...args) => {
+                                this.writeOutput(terminalId, args.join(' '), 'output');
+                            },
+                            error: (...args) => {
+                                this.writeOutput(terminalId, args.join(' '), 'error');
+                            }
+                        },
+                        setTimeout: setTimeout,
+                        setInterval: setInterval,
+                        clearTimeout: clearTimeout,
+                        clearInterval: clearInterval
+                    };
+                    
+                    // Execute code in sandbox
+                    const func = new Function('console', 'setTimeout', 'setInterval', code);
+                    func(sandbox.console, sandbox.setTimeout, sandbox.setInterval);
+                    
+                    this.writeOutput(terminalId, 'Execution completed', 'success');
+                } catch (error) {
+                    this.writeOutput(terminalId, `Error: ${error.message}`, 'error');
+                }
+            }
+
+            connectRedis(terminalId) {
+                this.writeOutput(terminalId, 'Connected to Redis on localhost:6379', 'success');
+                this.writeOutput(terminalId, 'Type "exit" to disconnect', 'output');
+                
+                // Change prompt to redis>
+                const terminal = this.terminals.get(terminalId);
+                terminal.cwd = 'redis>';
+            }
+
+            runNpm(terminalId, args) {
+                const subCmd = args[0];
+                
+                switch (subCmd) {
+                    case 'install':
+                        this.writeOutput(terminalId, 'Installing dependencies...', 'output');
+                        setTimeout(() => {
+                            this.writeOutput(terminalId, '✓ Dependencies installed', 'success');
+                        }, 1000);
+                        break;
+                    
+                    case 'start':
+                        this.writeOutput(terminalId, 'Starting development server...', 'output');
+                        this.writeOutput(terminalId, 'Server running on http://localhost:3000', 'success');
+                        break;
+                    
+                    default:
+                        this.writeOutput(terminalId, `npm ${args.join(' ')}`, 'output');
+                }
+            }
+
+            runGit(terminalId, args) {
+                const subCmd = args[0];
+                
+                switch (subCmd) {
+                    case 'status':
+                        this.writeOutput(terminalId, `On branch main
+        Your branch is up to date with 'origin/main'.
+
+        Changes not staged for commit:
+        modified:   src/userService.js
+
+        no changes added to commit`, 'output');
+                        break;
+                    
+                    case 'add':
+                        this.writeOutput(terminalId, 'Changes staged for commit', 'success');
+                        break;
+                    
+                    case 'commit':
+                        if (args.includes('-m')) {
+                            this.writeOutput(terminalId, '[main abc1234] ' + args.slice(2).join(' '), 'success');
+                            this.writeOutput(terminalId, '1 file changed, 10 insertions(+)', 'output');
+                        }
+                        break;
+                    
+                    default:
+                        this.writeOutput(terminalId, `git ${args.join(' ')}`, 'output');
+                }
+            }
+
+            setupResize() {
+                const handle = document.getElementById('terminalResizeHandle');
+                const container = document.getElementById('terminalContainer');
+                
+                handle.addEventListener('mousedown', (e) => {
+                    this.isResizing = true;
+                    document.body.style.cursor = 'row-resize';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isResizing) return;
+                    
+                    const newHeight = window.innerHeight - e.clientY - 22; // 22px for status bar
+                    container.style.height = Math.max(100, Math.min(600, newHeight)) + 'px';
+                    
+                    // Update editor
+                    const editorArea = document.querySelector('.editor-area');
+                    editorArea.style.marginBottom = container.style.height;
+                    
+                    if (window.editor) {
+                        editor.layout();
+                    }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    this.isResizing = false;
+                    document.body.style.cursor = '';
+                });
+            }
+
+            changeDirectory(terminalId, path) {
+                if (!path) {
+                    this.writeOutput(terminalId, 'Usage: cd <directory>', 'error');
+                    return;
+                }
+                
+                const terminal = this.terminals.get(terminalId);
+                
+                if (path === '..') {
+                    terminal.cwd = currentProject ? currentProject.name : '~';
+                } else {
+                    terminal.cwd = `${terminal.cwd}/${path}`;
+                }
+                
+                this.writeOutput(terminalId, '', 'output');
+            }
+        }
+
+        // Initialize terminal
+        const terminal = new Terminal();
+
+        // Add to your initializeApp function:
+        const originalInitApp = initializeApp;
+        initializeApp = async function() {
+            await originalInitApp();
+            terminal.init();
+        };
+
+        // Helper functions
+        function toggleTerminal() {
+            terminal.toggle();
+        }
+
+        function clearTerminal() {
+            terminal.clearTerminal();
+        }
+
+        function closeTerminal(id) {
+            // For now, just hide the terminal
+            terminal.toggle();
+        }
+
+        function createNewTerminal() {
+            // For demo, just clear current terminal
+            terminal.clearTerminal();
+        }
         // Switch to an already open file
         function switchToFile(filepath) {
             const fileData = openFiles.get(filepath);
