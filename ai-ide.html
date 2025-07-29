@@ -749,13 +749,11 @@
             display: flex;
         }
         
+        /* Fix AI panel header */
         .ai-header {
             padding: 15px;
-            background-color: #2d2d30;
-            border-bottom: 1px solid #3e3e42;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding-right: 50px; /* Add space for close button */
+            position: relative;
         }
         
         .ai-header h3 {
@@ -767,12 +765,9 @@
         }
         
         .ai-close-btn {
-            cursor: pointer;
-            font-size: 20px;
-            color: #888;
-            background: none;
-            border: none;
-            padding: 0;
+            position: absolute;
+            right: 15px;
+            top: 15px;
         }
         
         .ai-close-btn:hover {
@@ -1017,9 +1012,9 @@
             }
         }
         
-        /* Adjust main content when AI panel is open */
-        .main-content.ai-panel-open {
-            margin-right: 400px;
+       /* Move active users below when AI panel is open */
+        .ai-panel-open .active-users {
+            top: 60px !important;
         }
     </style>
 </head>
