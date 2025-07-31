@@ -435,6 +435,33 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
+// AI endpoint (optional - can also call directly from frontend)
+app.post('/api/ai/complete', async (req, res) => {
+    try {
+        const { messages, apiKey } = req.body;
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey || process.env.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4-turbo-preview',
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 1500
+            })
+        });
+        
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('AI API error:', error);
+        res.status(500).json({ error: 'AI request failed' });
+    }
+});
+
 // Search within a specific project
 app.get('/api/projects/:projectId/search', async (req, res) => {
     try {

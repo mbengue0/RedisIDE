@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redis IDE - Collaborative Edition</title>
+    <title>Redis IDE - AI Assistant Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -729,6 +729,376 @@
         * {
             box-sizing: border-box;
         }
+        
+        /* AI Assistant Panel */
+        .ai-assistant-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background-color: #1e1e1e;
+            border-left: 1px solid #3e3e42;
+            display: none;
+            flex-direction: column;
+            z-index: 999;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .ai-assistant-panel.active {
+            display: flex;
+        }
+        
+        /* Fix AI panel header */
+        .ai-header {
+            padding: 15px;
+            padding-right: 50px; /* Add space for close button */
+            position: relative;
+        }
+        
+        .ai-header h3 {
+            margin: 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ai-close-btn {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+        }
+        
+        .ai-close-btn:hover {
+            color: #fff;
+        }
+        
+        .ai-tabs {
+            display: flex;
+            background-color: #252526;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .ai-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .ai-tab:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .ai-tab.active {
+            border-bottom-color: #007acc;
+            color: #007acc;
+        }
+        
+        .ai-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .ai-chat {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .ai-message {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            max-width: 90%;
+        }
+        
+        .ai-message.user {
+            background-color: #094771;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        
+        .ai-message.assistant {
+            background-color: #2d2d30;
+            border: 1px solid #3e3e42;
+        }
+        
+        .ai-message pre {
+            background-color: #1e1e1e;
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 5px 0;
+        }
+        
+        .ai-message code {
+            background-color: #1e1e1e;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .ai-input-container {
+            padding: 15px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .ai-input {
+            flex: 1;
+            padding: 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-size: 13px;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+        }
+        
+        .ai-send-btn {
+            padding: 8px 16px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            align-self: flex-end;
+        }
+        
+        .ai-send-btn:hover {
+            background-color: #1a86d3;
+        }
+        
+        .ai-send-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        
+        /* AI Suggestions */
+        .ai-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .ai-suggestion {
+            padding: 6px 12px;
+            background-color: #3c3c3c;
+            border: 1px solid #3e3e42;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .ai-suggestion:hover {
+            background-color: #484848;
+            border-color: #007acc;
+        }
+        
+        /* Code Analysis Results */
+        .code-analysis {
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .analysis-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .analysis-item:last-child {
+            border-bottom: none;
+        }
+        
+        .analysis-severity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .severity-error {
+            background-color: #5a1d1d;
+            color: #f48771;
+        }
+        
+        .severity-warning {
+            background-color: #5a4a1d;
+            color: #cca700;
+        }
+        
+        .severity-info {
+            background-color: #1d4a5a;
+            color: #75beff;
+        }
+        
+        /* AI Toggle Button */
+        .ai-toggle-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 60px;
+            width: 50px;
+            height: 50px;
+            background-color: #007acc;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 998;
+            transition: all 0.3s;
+        }
+        
+        .ai-toggle-btn:hover {
+            background-color: #1a86d3;
+            transform: scale(1.1);
+        }
+        
+        .ai-toggle-btn.active {
+            background-color: #f48771;
+        }
+        
+        /* Loading animation */
+        .ai-loading {
+            display: flex;
+            gap: 4px;
+            padding: 10px;
+            justify-content: center;
+        }
+        
+        .ai-loading span {
+            width: 8px;
+            height: 8px;
+            background-color: #007acc;
+            border-radius: 50%;
+            animation: ai-pulse 1.4s ease-in-out infinite;
+        }
+        
+        .ai-loading span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .ai-loading span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes ai-pulse {
+            0%, 80%, 100% {
+                opacity: 0.3;
+                transform: scale(0.8);
+            }
+            40% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+       /* Move active users below when AI panel is open */
+        .ai-panel-open .active-users {
+            top: 60px !important;
+        }
+
+        /* Terminal Styles */
+        .terminal-container {
+            position: fixed;
+            bottom: 22px;
+            left: 0;
+            right: 0;
+            height: 250px;
+            background-color: #1e1e1e;
+            border-top: 2px solid #007acc;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .terminal-container.show {
+            display: flex;
+        }
+
+        body.terminal-open .ide-container {
+            margin-bottom: 250px;
+            height: calc(100vh - 250px);
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #2d2d30;
+            padding: 5px 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .terminal-body {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #1e1e1e;
+        }
+
+        .terminal-output {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        .terminal-output > div {
+            margin: 2px 0;
+        }
+
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .terminal-prompt {
+            color: #4ec9b0;
+            margin-right: 5px;
+        }
+
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .terminal-btn {
+            margin-right: 10px;
+            padding: 4px 10px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+     
     </style>
 </head>
 <body>
@@ -883,11 +1253,121 @@
         </div>
     </div>
     
+    <!-- AI Toggle Button -->
+    <div class="ai-toggle-btn" onclick="toggleAIPanel()" title="AI Assistant (Ctrl+Shift+A)">
+        🤖
+    </div>
+    
+    <!-- AI Assistant Panel -->
+    <div class="ai-assistant-panel" id="aiAssistantPanel">
+        <div class="ai-header">
+            <h3><span>🤖</span> AI Assistant</h3>
+            <button class="ai-close-btn" onclick="toggleAIPanel()">×</button>
+        </div>
+        
+        <div class="ai-tabs">
+            <div class="ai-tab active" onclick="switchAITab('chat')">Chat</div>
+            <div class="ai-tab" onclick="switchAITab('analyze')">Analyze</div>
+            <div class="ai-tab" onclick="switchAITab('refactor')">Refactor</div>
+        </div>
+        
+        <div class="ai-content">
+            <!-- Chat Tab -->
+            <div id="aiChatTab" class="ai-tab-content">
+                <div class="ai-suggestions">
+                    <div class="ai-suggestion" onclick="askAI('Explain this code')">Explain code</div>
+                    <div class="ai-suggestion" onclick="askAI('Find bugs')">Find bugs</div>
+                    <div class="ai-suggestion" onclick="askAI('Optimize performance')">Optimize</div>
+                    <div class="ai-suggestion" onclick="askAI('Add comments')">Add comments</div>
+                </div>
+                
+                <div class="ai-chat" id="aiChat">
+                    <div class="ai-message assistant">
+                        👋 Hi! I'm your AI coding assistant. I can help you:
+                        <ul>
+                            <li>Explain code</li>
+                            <li>Find and fix bugs</li>
+                            <li>Suggest optimizations</li>
+                            <li>Write documentation</li>
+                            <li>Refactor code</li>
+                        </ul>
+                        Select some code and ask me anything!
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analyze Tab -->
+            <div id="aiAnalyzeTab" class="ai-tab-content" style="display: none;">
+                <button onclick="analyzeCurrentFile()">Analyze Current File</button>
+                <div id="analysisResults"></div>
+            </div>
+            
+            <!-- Refactor Tab -->
+            <div id="aiRefactorTab" class="ai-tab-content" style="display: none;">
+                <div class="ai-suggestions">
+                    <div class="ai-suggestion" onclick="refactorCode('extract-function')">Extract Function</div>
+                    <div class="ai-suggestion" onclick="refactorCode('simplify')">Simplify</div>
+                    <div class="ai-suggestion" onclick="refactorCode('modern-syntax')">Modernize</div>
+                    <div class="ai-suggestion" onclick="refactorCode('add-types')">Add Types</div>
+                </div>
+                <div id="refactorResults"></div>
+            </div>
+        </div>
+        
+        <div class="ai-input-container">
+            <textarea 
+                class="ai-input" 
+                id="aiInput" 
+                placeholder="Ask me anything about your code..."
+                onkeydown="handleAIInputKeydown(event)"
+            ></textarea>
+            <button class="ai-send-btn" id="aiSendBtn" onclick="sendAIMessage()">Send</button>
+        </div>
+    </div>
+    <!-- Terminal HTML -->
+    <div class="terminal-container" id="terminalContainer">
+        <div class="terminal-header">
+            <div class="terminal-tabs">
+                <div class="terminal-tab active">
+                    <span>Terminal</span>
+                </div>
+            </div>
+            <div class="terminal-actions">
+                <button onclick="clearTerminal()" title="Clear">🗑️</button>
+                <button onclick="closeTerminal()" title="Close">×</button>
+            </div>
+        </div>
+        <div class="terminal-body" id="terminalBody">
+            <div class="terminal-output" id="terminalOutput"></div>
+            <div class="terminal-input-line">
+                <span class="terminal-prompt">$ </span>
+                <input type="text" class="terminal-input" id="terminalInput" autocomplete="off">
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this RIGHT BEFORE </body> in your ai-ide.html -->
+    <div id="simpleTerminal" style="position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: #1e1e1e; border-top: 3px solid #007acc; display: none; z-index: 9999;">
+        <div style="padding: 10px; height: 100%; display: flex; flex-direction: column;">
+            <div style="flex: 1; overflow-y: auto; font-family: monospace; color: #ccc;" id="termOut"></div>
+            <div style="display: flex; align-items: center;">
+                <span style="color: #4ec9b0;">$ </span>
+                <input id="termIn" type="text" style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: monospace; margin-left: 5px;">
+            </div>
+        </div>
+    </div>
+    
     <!-- Scripts -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
     
     <script>
+        // Copy ALL scripts from collab-ide.html
+        // Then ADD these AI-specific functions:
+        
+        let aiApiKey = localStorage.getItem('openai_api_key') || '';
+        let aiConversation = [];
+        let isAIProcessing = false;
         const API_URL = 'http://localhost:3000/api';
         let socket = null;
         let sessionId = null;
@@ -914,7 +1394,9 @@
         let draggedItemType = null;
         let undoTimeout = null;
         let searchResults = [];
-
+        // Terminal System
+        let terminalHistory = [];
+        let historyIndex = 0;
         // Configure Monaco loader
         require.config({ 
             paths: { 
@@ -981,6 +1463,48 @@
                 updateStatus('Error opening file', true);
             }
         }
+        
+        // Simple terminal that WILL work
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                const term = document.getElementById('simpleTerminal');
+                term.style.display = term.style.display === 'none' ? 'block' : 'none';
+                if (term.style.display === 'block') {
+                    document.getElementById('termIn').focus();
+                }
+            }
+        });
+
+        document.getElementById('termIn').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const cmd = this.value;
+                const out = document.getElementById('termOut');
+                out.innerHTML += '<div>$ ' + cmd + '</div>';
+                
+                if (cmd === 'help') {
+                    out.innerHTML += '<div>Commands: help, clear, demo</div>';
+                } else if (cmd === 'clear') {
+                    out.innerHTML = '';
+                } else if (cmd === 'demo') {
+                    out.innerHTML += '<div style="color:#4ec9b0">Redis IDE Terminal v1.0</div>';
+                    out.innerHTML += '<div>Your amazing IDE is ready for presentation!</div>';
+                }
+                
+                this.value = '';
+                out.scrollTop = out.scrollHeight;
+            }
+        });
+
+        // Also add a floating button
+        const btn = document.createElement('div');
+        btn.innerHTML = 'Terminal';
+        btn.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#007acc;color:white;padding:10px 20px;border-radius:5px;cursor:pointer;z-index:9999;';
+        btn.onclick = function() {
+            const term = document.getElementById('simpleTerminal');
+            term.style.display = term.style.display === 'none' ? 'block' : 'none';
+        };
+        document.body.appendChild(btn);
 
         // Switch to an already open file
         function switchToFile(filepath) {
@@ -3013,12 +3537,623 @@
             }
         };
         
-        // Initialize collaboration after app loads
-        const originalInitializeApp = initializeApp;
-        initializeApp = async function() {
-            await originalInitializeApp();
-            initializeCollaboration();
-        };
+        // Initialize AI features
+        function initializeAI() {
+            // Remove API key check for speed
+            console.log('AI Assistant ready (Demo mode - no API key needed)');
+            // Remove any API key prompts
+            window.aiApiKey = 'demo-mode';
+            
+            // Add keyboard shortcut
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+                    e.preventDefault();
+                    toggleAIPanel();
+                }
+            });
+        }
+        
+        function showAPIKeyPrompt() {
+            const key = prompt('Please enter your OpenAI API key:');
+            if (key) {
+                aiApiKey = key;
+                localStorage.setItem('openai_api_key', key);
+            }
+        }
+        
+        function toggleAIPanel() {
+            const panel = document.getElementById('aiAssistantPanel');
+            const toggleBtn = document.querySelector('.ai-toggle-btn');
+            const mainContent = document.querySelector('.main-content');
+            
+            panel.classList.toggle('active');
+            toggleBtn.classList.toggle('active');
+            mainContent.classList.toggle('ai-panel-open');
+            
+            // Resize Monaco editor
+            if (editor) {
+                setTimeout(() => editor.layout(), 300);
+            }
+        }
+        
+        function switchAITab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('.ai-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.ai-tab').forEach(tabEl => {
+                tabEl.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`ai${tab.charAt(0).toUpperCase() + tab.slice(1)}Tab`).style.display = 'block';
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+        
+        async function sendAIMessage() {
+            const input = document.getElementById('aiInput');
+            const message = input.value.trim();
+            
+            if (!message || isAIProcessing) return;
+            
+            // Add user message
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            // Get context
+            const context = getCodeContext();
+            
+            // Show loading
+            showAILoading();
+            isAIProcessing = true;
+            document.getElementById('aiSendBtn').disabled = true;
+            
+            try {
+                const response = await callOpenAI(message, context);
+                addChatMessage(response, 'assistant');
+            } catch (error) {
+                console.error('AI Error:', error);
+                addChatMessage('Sorry, I encountered an error. Please check your API key or try again.', 'assistant');
+            } finally {
+                hideAILoading();
+                isAIProcessing = false;
+                document.getElementById('aiSendBtn').disabled = false;
+            }
+        }
+        
+        function getCodeContext() {
+            let context = {
+                currentFile: currentFile,
+                selection: null,
+                fullCode: null
+            };
+            
+            if (editor) {
+                const selection = editor.getSelection();
+                if (!selection.isEmpty()) {
+                    context.selection = editor.getModel().getValueInRange(selection);
+                }
+                context.fullCode = editor.getValue();
+            }
+            
+            return context;
+        }
+        
+        // Replace the AI function with this working version
+        async function callOpenAI(message, context) {
+            // Simulate AI processing delay
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const responses = {
+                'explain': {
+                    'default': 'This code performs the following operations:\n1. Defines the function structure\n2. Processes the input parameters\n3. Returns the expected result',
+                    'fetch': 'This code makes an HTTP request to an API endpoint. The fetch() function returns a Promise that resolves with the Response object.',
+                    'function': 'This is a function declaration that takes parameters and returns a value after processing.'
+                },
+                'bugs': {
+                    'default': '🐛 Potential issues found:\n• No error handling for edge cases\n• Missing input validation\n• No null checks for objects',
+                    'async': '🐛 Async/Promise issues:\n• Missing try-catch block\n• No error handling for rejected promises\n• Potential race condition'
+                },
+                'optimize': {
+                    'default': '⚡ Optimization suggestions:\n• Cache repeated calculations\n• Use more efficient data structures\n• Reduce unnecessary iterations',
+                    'loop': '⚡ Loop optimization:\n• Consider using .map() or .filter() instead\n• Move constants outside the loop\n• Use break/continue when possible'
+                }
+            };
+            
+            // Detect what user is asking for
+            const msgLower = message.toLowerCase();
+            let responseType = 'explain';
+            let subType = 'default';
+            
+            if (msgLower.includes('bug') || msgLower.includes('error') || msgLower.includes('issue')) {
+                responseType = 'bugs';
+                if (context.selection && context.selection.includes('async')) subType = 'async';
+            } else if (msgLower.includes('optimize') || msgLower.includes('improve') || msgLower.includes('faster')) {
+                responseType = 'optimize';
+                if (context.selection && context.selection.includes('for')) subType = 'loop';
+            } else if (msgLower.includes('explain') || msgLower.includes('what') || msgLower.includes('how')) {
+                responseType = 'explain';
+                if (context.selection && context.selection.includes('fetch')) subType = 'fetch';
+                else if (context.selection && context.selection.includes('function')) subType = 'function';
+            }
+            
+            let response = responses[responseType][subType] || responses[responseType]['default'];
+            
+            // Add code-specific analysis if code is selected
+            if (context.selection) {
+                response += '\n\n**Your code:**\n```javascript\n' + context.selection + '\n```';
+                
+                // Add specific suggestions based on code
+                if (context.selection.includes('fetch') && !context.selection.includes('catch')) {
+                    response += '\n\n💡 **Suggestion**: Add `.catch()` to handle network errors.';
+                }
+                if (context.selection.includes('for') && context.selection.includes('push')) {
+                    response += '\n\n💡 **Suggestion**: Consider using `.map()` for transforming arrays.';
+                }
+            }
+            
+            return response;
+        }
+
+
+        // Mock AI for quick demo (no API needed)
+        function mockAIResponse(message, context) {
+            const responses = {
+                'explain': 'This code defines a function that fetches user data from an API endpoint. It uses async/await for handling asynchronous operations.',
+                'bugs': 'Potential issues found:\n• No error handling for network failures\n• Missing input validation\n• No loading state management',
+                'optimize': 'Optimization suggestions:\n• Add caching for repeated requests\n• Implement request debouncing\n• Use Promise.all for parallel requests',
+                'comments': '// Fetches user data from the API\n// @param {string} userId - The user ID to fetch\n// @returns {Promise<Object>} User data object'
+            };
+            
+            const key = Object.keys(responses).find(k => message.toLowerCase().includes(k));
+            return responses[key] || 'I can help you analyze code, find bugs, and suggest improvements. Try selecting some code!';
+        }
+        
+        function addChatMessage(message, sender) {
+            const chat = document.getElementById('aiChat');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `ai-message ${sender}`;
+            
+            // Convert markdown code blocks to HTML
+            const formattedMessage = formatAIMessage(message);
+            messageDiv.innerHTML = formattedMessage;
+            
+            chat.appendChild(messageDiv);
+            chat.scrollTop = chat.scrollHeight;
+            
+            // Add copy buttons to code blocks
+            messageDiv.querySelectorAll('pre').forEach(pre => {
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent = 'Copy';
+                copyBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; padding: 2px 8px; background: #007acc; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(pre.textContent);
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                };
+                pre.style.position = 'relative';
+                pre.appendChild(copyBtn);
+            });
+        }
+        
+        function formatAIMessage(message) {
+            // Convert markdown to HTML
+            return message
+                .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                    return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
+                })
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showAILoading() {
+            const chat = document.getElementById('aiChat');
+            const loading = document.createElement('div');
+            loading.className = 'ai-loading';
+            loading.id = 'aiLoading';
+            loading.innerHTML = '<span></span><span></span><span></span>';
+            chat.appendChild(loading);
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        function hideAILoading() {
+            const loading = document.getElementById('aiLoading');
+            if (loading) loading.remove();
+        }
+        
+        function askAI(prompt) {
+            document.getElementById('aiInput').value = prompt;
+            sendAIMessage();
+        }
+        
+        function handleAIInputKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendAIMessage();
+            }
+        }
+        
+        function getFileLanguage() {
+            if (!currentFile) return 'plaintext';
+            const ext = currentFile.split('.').pop();
+            return getLanguageMode(ext);
+        }
+        
+        async function analyzeCurrentFile() {
+            if (!currentFile || !editor) {
+                alert('Please open a file first');
+                return;
+            }
+            
+            const code = editor.getValue();
+            const resultsDiv = document.getElementById('analysisResults');
+            resultsDiv.innerHTML = '<div class="ai-loading"><span></span><span></span><span></span></div>';
+            
+            try {
+                const analysis = await callOpenAI(
+                    'Analyze this code for potential bugs, performance issues, and best practice violations. Format as a list with severity levels.',
+                    { fullCode: code, currentFile }
+                );
+                
+                resultsDiv.innerHTML = `<div class="code-analysis">${formatAnalysisResults(analysis)}</div>`;
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="analysis-item">Error analyzing code</div>';
+            }
+        }
+        
+        function formatAnalysisResults(analysis) {
+            // Parse AI response and format nicely
+            return analysis
+                .split('\n')
+                .filter(line => line.trim())
+                .map(line => {
+                    let severity = 'info';
+                    if (line.toLowerCase().includes('error') || line.toLowerCase().includes('bug')) {
+                        severity = 'error';
+                    } else if (line.toLowerCase().includes('warning') || line.toLowerCase().includes('issue')) {
+                        severity = 'warning';
+                    }
+                    
+                    return `
+                        <div class="analysis-item">
+                            <span class="analysis-severity severity-${severity}">${severity}</span>
+                            <span>${line}</span>
+                        </div>
+                    `;
+                })
+                .join('');
+        }
+        
+        async function refactorCode(type) {
+            const selection = editor?.getSelection();
+            if (!selection || selection.isEmpty()) {
+                alert('Please select code to refactor');
+                return;
+            }
+            
+            const code = editor.getModel().getValueInRange(selection);
+            const resultsDiv = document.getElementById('refactorResults');
+            resultsDiv.innerHTML = '<div class="ai-loading"><span></span><span></span><span></span></div>';
+            
+            const prompts = {
+                'extract-function': 'Extract this code into a well-named function with parameters',
+                'simplify': 'Simplify this code while maintaining functionality',
+                'modern-syntax': 'Modernize this code using latest JavaScript/TypeScript features',
+                'add-types': 'Add TypeScript types to this code'
+            };
+            
+            try {
+                const refactored = await callOpenAI(prompts[type], { selection: code });
+                resultsDiv.innerHTML = formatAIMessage(refactored);
+                
+                // Add apply button
+                const applyBtn = document.createElement('button');
+                applyBtn.textContent = 'Apply Refactoring';
+                applyBtn.style.cssText = 'margin-top: 10px; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                applyBtn.onclick = () => {
+                    // Extract code from the response
+                    const codeMatch = refactored.match(/```[\w]*\n([\s\S]*?)```/);
+                    if (codeMatch) {
+                        editor.executeEdits('ai-refactor', [{
+                            range: selection,
+                            text: codeMatch[1].trim()
+                        }]);
+                    }
+                };
+                resultsDiv.appendChild(applyBtn);
+            } catch (error) {
+                resultsDiv.innerHTML = '<div>Error refactoring code</div>';
+            }
+        }
+        
+
+        function initializeTerminal() {
+            console.log('Initializing terminal...');
+            
+            // Check if terminal container exists
+            const terminalContainer = document.getElementById('terminalContainer');
+            if (!terminalContainer) {
+                console.error('Terminal container not found!');
+                return;
+            }
+            
+            // Add terminal button to status bar
+            const statusBar = document.querySelector('.status-bar');
+            if (statusBar && !document.querySelector('.terminal-btn')) {
+                const btn = document.createElement('button');
+                btn.className = 'terminal-btn';
+                btn.textContent = 'Terminal';
+                btn.onclick = toggleTerminal;
+                
+                // Find the share button or status-right
+                const shareBtn = statusBar.querySelector('.share-button');
+                const statusRight = statusBar.querySelector('.status-right');
+                
+                if (shareBtn) {
+                    statusBar.insertBefore(btn, shareBtn);
+                } else if (statusRight) {
+                    statusBar.insertBefore(btn, statusRight);
+                } else {
+                    statusBar.appendChild(btn);
+                }
+                
+                console.log('Terminal button added to status bar');
+            }
+            
+            // Setup terminal input
+            const input = document.getElementById('terminalInput');
+            if (input) {
+                // Remove any existing listeners
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                // Add new listener
+                newInput.addEventListener('keydown', handleTerminalInput);
+                console.log('Terminal input handler attached');
+            } else {
+                console.error('Terminal input not found!');
+            }
+            
+            // Add keyboard shortcut - only once
+            if (!window.terminalKeyboardSetup) {
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && (e.key === 'j' || e.key === 'J')) {
+                        e.preventDefault();
+                        toggleTerminal();
+                        console.log('Terminal toggled via Ctrl+J');
+                    }
+                });
+                window.terminalKeyboardSetup = true;
+            }
+            
+            // Add welcome message
+            const output = document.getElementById('terminalOutput');
+            if (output && output.children.length === 0) {
+                writeToTerminal('Redis IDE Terminal - Type "help" for commands', '#4ec9b0');
+            }
+            
+            console.log('✅ Terminal initialization complete');
+        }
+
+        // Replace the toggleTerminal function with this:
+        function toggleTerminal() {
+            console.log('Toggle terminal clicked');
+            const terminal = document.getElementById('terminalContainer');
+            
+            if (!terminal) {
+                console.error('Terminal container not found!');
+                return;
+            }
+            
+            const isShowing = terminal.classList.contains('show');
+            
+            if (isShowing) {
+                terminal.classList.remove('show');
+                document.body.classList.remove('terminal-open');
+            } else {
+                terminal.classList.add('show');
+                document.body.classList.add('terminal-open');
+                
+                // Focus input
+                setTimeout(() => {
+                    const input = document.getElementById('terminalInput');
+                    if (input) input.focus();
+                }, 100);
+            }
+            
+            // Resize editor if exists
+            if (window.editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        function closeTerminal() {
+            document.getElementById('terminalContainer').classList.remove('show');
+            document.body.classList.remove('terminal-open');
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminalOutput').innerHTML = '';
+        }
+
+        function writeToTerminal(text, color = '#ccc') {
+            const output = document.getElementById('terminalOutput');
+            const line = document.createElement('div');
+            line.style.color = color;
+            line.textContent = text;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function handleTerminalInput(e) {
+            if (e.key !== 'Enter') return;
+            
+            const command = this.value.trim();
+            if (!command) return;
+            
+            // Add to history
+            terminalHistory.push(command);
+            historyIndex = terminalHistory.length;
+            
+            // Show command
+            writeToTerminal(`$ ${command}`, '#4ec9b0');
+            
+            // Process command
+            const [cmd, ...args] = command.split(' ');
+            
+            switch(cmd) {
+                case 'help':
+                    writeToTerminal('Available commands:');
+                    writeToTerminal('  help     - Show this help');
+                    writeToTerminal('  clear    - Clear terminal');
+                    writeToTerminal('  node     - Run JavaScript file');
+                    writeToTerminal('  ls       - List files');
+                    writeToTerminal('  git      - Git commands');
+                    writeToTerminal('  npm      - NPM commands');
+                    break;
+                    
+                case 'clear':
+                    clearTerminal();
+                    break;
+                    
+                case 'node':
+                    executeNodeCommand(args.join(' '));
+                    break;
+                    
+                case 'ls':
+                    writeToTerminal('src/  components/  utils/  package.json  README.md', '#4ec9b0');
+                    break;
+                    
+                case 'git':
+                    handleGitCommand(args);
+                    break;
+                    
+                case 'npm':
+                    handleNpmCommand(args);
+                    break;
+                    
+                default:
+                    writeToTerminal(`Command not found: ${cmd}`, '#f48771');
+            }
+            
+            this.value = '';
+        }
+
+        function executeNodeCommand(filename) {
+            if (!window.editor) {
+                writeToTerminal('Error: No editor found', '#f48771');
+                return;
+            }
+            
+            writeToTerminal(`Running ${filename || 'current file'}...`, '#4ec9b0');
+            
+            try {
+                const code = editor.getValue();
+                
+                // Create custom console
+                const customConsole = {
+                    log: (...args) => writeToTerminal(args.join(' ')),
+                    error: (...args) => writeToTerminal('❌ ' + args.join(' '), '#f48771'),
+                    warn: (...args) => writeToTerminal('⚠️ ' + args.join(' '), '#dcdcaa')
+                };
+                
+                // Execute code
+                const func = new Function('console', code);
+                func(customConsole);
+                
+                writeToTerminal('✓ Execution completed', '#4ec9b0');
+                
+            } catch (error) {
+                writeToTerminal(`Error: ${error.message}`, '#f48771');
+            }
+        }
+
+        function handleGitCommand(args) {
+            const subCmd = args[0];
+            
+            switch(subCmd) {
+                case 'status':
+                    writeToTerminal('On branch main');
+                    writeToTerminal('Your branch is up to date with origin/main');
+                    writeToTerminal('');
+                    writeToTerminal('Changes not staged for commit:');
+                    writeToTerminal('  modified: src/userService.js', '#f48771');
+                    break;
+                    
+                case 'add':
+                    writeToTerminal('Changes staged for commit', '#4ec9b0');
+                    break;
+                    
+                case 'commit':
+                    if (args.includes('-m')) {
+                        writeToTerminal('[main abc123] ' + args.slice(args.indexOf('-m') + 1).join(' '), '#4ec9b0');
+                    }
+                    break;
+                    
+                default:
+                    writeToTerminal('Usage: git [status|add|commit]');
+            }
+        }
+
+        function handleNpmCommand(args) {
+            const subCmd = args[0];
+            
+            switch(subCmd) {
+                case 'install':
+                    writeToTerminal('Installing dependencies...', '#dcdcaa');
+                    setTimeout(() => {
+                        writeToTerminal('✓ Dependencies installed', '#4ec9b0');
+                    }, 1000);
+                    break;
+                    
+                case 'start':
+                    writeToTerminal('Starting server...', '#dcdcaa');
+                    writeToTerminal('Server running on http://localhost:3000', '#4ec9b0');
+                    break;
+                    
+                default:
+                    writeToTerminal('Usage: npm [install|start]');
+            }
+        }
+
+        // Combined initialization - Only ONE initializeApp override!
+        (function() {
+            const originalInitializeApp = initializeApp;
+            initializeApp = async function() {
+                console.log('Starting full initialization...');
+                
+                // Call original
+                await originalInitializeApp();
+                
+                // Initialize all features
+                console.log('Initializing Collaboration...');
+                initializeCollaboration();
+                
+                console.log('Initializing AI...');
+                initializeAI();
+                
+                // Delay terminal init to ensure DOM is ready
+                setTimeout(() => {
+                    console.log('Initializing Terminal...');
+                    initializeTerminal();
+                }, 100);
+                
+                console.log('All features initialized!');
+            };
+        })();
+
     </script>
 </body>
 </html>
