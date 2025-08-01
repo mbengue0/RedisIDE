@@ -1169,6 +1169,7 @@
                 <div class="status-bar">
                     <span class="status-message" id="statusMessage">Ready</span>
                     <span class="search-status" id="searchStatus"></span>
+                    <button class="terminal-btn" onclick="openTerminal()">🖥 Terminal</button>
                     <button class="share-button" onclick="showShareDialog()">Share Project</button>
                     <div class="status-right">
                         <span id="cursorPosition">Ln 1, Col 1</span>
@@ -1341,7 +1342,15 @@
             <div class="terminal-output" id="terminalOutput"></div>
             <div class="terminal-input-line">
                 <span class="terminal-prompt">$ </span>
-                <input type="text" class="terminal-input" id="terminalInput" autocomplete="off">
+                <input type="text" 
+                    class="terminal-input" 
+                    id="terminalInput" 
+                    autocomplete="off" 
+                    onkeydown="if(event.key === 'Enter' && this.value.trim()) { 
+                        writeToTerminal('$ ' + this.value, 'terminal-prompt'); 
+                        processTerminalCommand(this.value.trim()); 
+                        this.value = ''; 
+                    }">
             </div>
         </div>
     </div>
@@ -1362,8 +1371,38 @@
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
     
     <script>
-        // Copy ALL scripts from collab-ide.html
-        // Then ADD these AI-specific functions:
+        
+        // Global terminal command processor
+        window.processTerminalCommand = function(command) {
+            console.log('Processing command:', command);
+            const [cmd, ...args] = command.split(' ');
+            
+            switch(cmd.toLowerCase()) {
+                case 'help':
+                    writeToTerminal('Available commands:', 'terminal-info');
+                    writeToTerminal('  help     - Show this help');
+                    writeToTerminal('  clear    - Clear terminal');
+                    writeToTerminal('  echo     - Echo text');
+                    writeToTerminal('  ls       - List files');
+                    break;
+                    
+                case 'clear':
+                    document.getElementById('terminalOutput').innerHTML = '';
+                    break;
+                    
+                case 'echo':
+                    writeToTerminal(args.join(' ') || 'Echo: no text provided');
+                    break;
+                    
+                case 'ls':
+                    writeToTerminal('src/  components/  utils/  package.json  README.md');
+                    break;
+                    
+                default:
+                    writeToTerminal('Command not found: ' + cmd, 'terminal-error');
+            }
+        };
+
         
         let aiApiKey = localStorage.getItem('openai_api_key') || '';
         let aiConversation = [];
@@ -3915,17 +3954,40 @@
             // Setup terminal input
             const input = document.getElementById('terminalInput');
             if (input) {
-                // Remove any existing listeners
+                // Remove any existing event listeners by cloning
                 const newInput = input.cloneNode(true);
                 input.parentNode.replaceChild(newInput, input);
                 
-                // Add new listener
-                newInput.addEventListener('keydown', handleTerminalInput);
+                // Add event listener to the new element
+                newInput.addEventListener('keydown', (e) => {
+                    console.log('Key pressed:', e.key);
+                    if (e.key === 'Enter') {
+                        const command = e.target.value.trim();
+                        if (command) {
+                            console.log('Executing command:', command);
+                            
+                            // Add to history
+                            terminalHistory.push(command);
+                            historyIndex = terminalHistory.length;
+                            
+                            // Show command
+                            writeToTerminal(`$ ${command}`, 'terminal-prompt');
+                            
+                            // Process command
+                            processCommand(command);
+                            
+                            // Clear input
+                            e.target.value = '';
+                        }
+                    }
+                });
+                
                 console.log('Terminal input handler attached');
             } else {
-                console.error('Terminal input not found!');
+                console.error('Terminal input element not found!');
             }
             
+
             // Add keyboard shortcut - only once
             if (!window.terminalKeyboardSetup) {
                 document.addEventListener('keydown', (e) => {
@@ -3941,7 +4003,7 @@
             // Add welcome message
             const output = document.getElementById('terminalOutput');
             if (output && output.children.length === 0) {
-                writeToTerminal('Redis IDE Terminal - Type "help" for commands', '#4ec9b0');
+                writeToTerminal('Redis IDE Terminal - Type "help" for commands', 'terminal-success');
             }
             
             console.log('✅ Terminal initialization complete');
@@ -3980,27 +4042,57 @@
         }
 
         function closeTerminal() {
-            document.getElementById('terminalContainer').classList.remove('show');
-            document.body.classList.remove('terminal-open');
+            const terminal = document.getElementById('terminalContainer');
+            if (terminal) {
+                terminal.style.display = 'none';
+                document.body.classList.remove('terminal-open');
+            }
+            
+            if (editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        function openTerminal() {
+            const terminal = document.getElementById('terminalContainer');
+            if (terminal) {
+                terminal.style.display = 'flex';
+                document.body.classList.add('terminal-open');
+            }
+
+            if (editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
         }
 
         function clearTerminal() {
             document.getElementById('terminalOutput').innerHTML = '';
         }
 
-        function writeToTerminal(text, color = '#ccc') {
+        function writeToTerminal(text, classNameOrColor = '') {
             const output = document.getElementById('terminalOutput');
+            if (!output) return;
+            
             const line = document.createElement('div');
-            line.style.color = color;
+            
+            // Check if it's a color (starts with #) or a className
+            if (classNameOrColor.startsWith('#')) {
+                line.style.color = classNameOrColor;
+            } else if (classNameOrColor) {
+                line.className = classNameOrColor;
+            }
+            
             line.textContent = text;
             output.appendChild(line);
             output.scrollTop = output.scrollHeight;
         }
 
         function handleTerminalInput(e) {
+            console.log('handleTerminalInput called with key:', e.key); // Debug log
             if (e.key !== 'Enter') return;
             
-            const command = this.value.trim();
+            const input = e.target; // Get the input element from the event
+            const command = input.value.trim(); // Use input.value instead of this.value
             if (!command) return;
             
             // Add to history
@@ -4048,7 +4140,7 @@
                     writeToTerminal(`Command not found: ${cmd}`, '#f48771');
             }
             
-            this.value = '';
+            input.value = ''; // Clear using input.value instead of this.value
         }
 
         function executeNodeCommand(filename) {
