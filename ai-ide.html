@@ -832,17 +832,30 @@
         
         .ai-message pre {
             background-color: #1e1e1e;
-            padding: 8px;
+            padding: 12px;
             border-radius: 4px;
             overflow-x: auto;
-            margin: 5px 0;
+            margin: 8px 0;
+            position: relative;
+            white-space: pre;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.4;
         }
         
+        .ai-message pre code {
+            background: none;
+            padding: 0;
+            white-space: pre;
+            display: block;
+        }
+
         .ai-message code {
             background-color: #1e1e1e;
             padding: 2px 4px;
             border-radius: 3px;
-            font-size: 12px;
+            font-size: 13px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            white-space: pre;
         }
         
         .ai-input-container {
@@ -1015,6 +1028,59 @@
        /* Move active users below when AI panel is open */
         .ai-panel-open .active-users {
             top: 60px !important;
+        }
+
+        /* Better styling for Analyze tab */
+        #aiAnalyzeTab button {
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 15px;
+        }
+
+        #aiAnalyzeTab button:hover {
+            background-color: #1a86d3;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+        }
+
+        #aiAnalyzeTab button:active {
+            transform: translateY(0);
+        }
+
+        /* Style the analysis results */
+        #analysisResults {
+            background-color: #252526;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .code-analysis h3 {
+            color: #ffffff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .code-analysis h4 {
+            color: #cccccc;
+            font-size: 14px;
+            margin: 15px 0 10px 0;
+        }
+
+        .code-analysis p {
+            color: #d4d4d4;
+            line-height: 1.5;
+            margin: 8px 0;
         }
 
         /* Terminal Styles */
@@ -1305,6 +1371,11 @@
             
             <!-- Refactor Tab -->
             <div id="aiRefactorTab" class="ai-tab-content" style="display: none;">
+                <div style="padding: 10px; background: #252526; border-radius: 6px; margin-bottom: 15px;">
+                    <p style="color: #cccccc; font-size: 13px; margin: 0;">
+                        Select code in the editor, then choose a refactoring option:
+                    </p>
+                </div>
                 <div class="ai-suggestions">
                     <div class="ai-suggestion" onclick="refactorCode('extract-function')">Extract Function</div>
                     <div class="ai-suggestion" onclick="refactorCode('simplify')">Simplify</div>
@@ -1404,7 +1475,6 @@
         };
 
         
-        let aiApiKey = localStorage.getItem('openai_api_key') || '';
         let aiConversation = [];
         let isAIProcessing = false;
         const API_URL = 'http://localhost:3000/api';
@@ -1436,6 +1506,29 @@
         // Terminal System
         let terminalHistory = [];
         let historyIndex = 0;
+
+        // Get Groq API key from localStorage or prompt user
+        let groqApiKey = localStorage.getItem('groq_api_key') || '';
+
+        // Function to set API key
+        function setGroqAPIKey() {
+            const key = prompt('Enter your Groq API key:');
+            if (key) {
+                groqApiKey = key;
+                localStorage.setItem('groq_api_key', key);
+                alert('API key saved!');
+            }
+        }
+
+        // Check if API key exists on load
+        if (!groqApiKey) {
+            setTimeout(() => {
+                if (confirm('No Groq API key found. Would you like to add one now?')) {
+                    setGroqAPIKey();
+                }
+            }, 1000);
+        }
+        
         // Configure Monaco loader
         require.config({ 
             paths: { 
@@ -3592,14 +3685,6 @@
             });
         }
         
-        function showAPIKeyPrompt() {
-            const key = prompt('Please enter your OpenAI API key:');
-            if (key) {
-                aiApiKey = key;
-                localStorage.setItem('openai_api_key', key);
-            }
-        }
-        
         function toggleAIPanel() {
             const panel = document.getElementById('aiAssistantPanel');
             const toggleBtn = document.querySelector('.ai-toggle-btn');
@@ -3643,8 +3728,21 @@
             addChatMessage(message, 'user');
             input.value = '';
             
-            // Get context
-            const context = getCodeContext();
+            // Get context - including the current code
+            const context = {
+                currentFile: currentFile,
+                selection: null,
+                fullCode: null
+            };
+            
+            if (editor) {
+                const selection = editor.getSelection();
+                if (!selection.isEmpty()) {
+                    context.selection = editor.getModel().getValueInRange(selection);
+                }
+                // Always include the full code
+                context.fullCode = editor.getValue();
+            }
             
             // Show loading
             showAILoading();
@@ -3656,7 +3754,7 @@
                 addChatMessage(response, 'assistant');
             } catch (error) {
                 console.error('AI Error:', error);
-                addChatMessage('Sorry, I encountered an error. Please check your API key or try again.', 'assistant');
+                addChatMessage('Sorry, I encountered an error. Please make sure your API key is set.', 'assistant');
             } finally {
                 hideAILoading();
                 isAIProcessing = false;
@@ -3682,60 +3780,61 @@
             return context;
         }
         
-        // Replace the AI function with this working version
+        // Replace the AI function with this working version to integrate Groq
         async function callOpenAI(message, context) {
-            // Simulate AI processing delay
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            const responses = {
-                'explain': {
-                    'default': 'This code performs the following operations:\n1. Defines the function structure\n2. Processes the input parameters\n3. Returns the expected result',
-                    'fetch': 'This code makes an HTTP request to an API endpoint. The fetch() function returns a Promise that resolves with the Response object.',
-                    'function': 'This is a function declaration that takes parameters and returns a value after processing.'
-                },
-                'bugs': {
-                    'default': '🐛 Potential issues found:\n• No error handling for edge cases\n• Missing input validation\n• No null checks for objects',
-                    'async': '🐛 Async/Promise issues:\n• Missing try-catch block\n• No error handling for rejected promises\n• Potential race condition'
-                },
-                'optimize': {
-                    'default': '⚡ Optimization suggestions:\n• Cache repeated calculations\n• Use more efficient data structures\n• Reduce unnecessary iterations',
-                    'loop': '⚡ Loop optimization:\n• Consider using .map() or .filter() instead\n• Move constants outside the loop\n• Use break/continue when possible'
-                }
-            };
-            
-            // Detect what user is asking for
-            const msgLower = message.toLowerCase();
-            let responseType = 'explain';
-            let subType = 'default';
-            
-            if (msgLower.includes('bug') || msgLower.includes('error') || msgLower.includes('issue')) {
-                responseType = 'bugs';
-                if (context.selection && context.selection.includes('async')) subType = 'async';
-            } else if (msgLower.includes('optimize') || msgLower.includes('improve') || msgLower.includes('faster')) {
-                responseType = 'optimize';
-                if (context.selection && context.selection.includes('for')) subType = 'loop';
-            } else if (msgLower.includes('explain') || msgLower.includes('what') || msgLower.includes('how')) {
-                responseType = 'explain';
-                if (context.selection && context.selection.includes('fetch')) subType = 'fetch';
-                else if (context.selection && context.selection.includes('function')) subType = 'function';
-            }
-            
-            let response = responses[responseType][subType] || responses[responseType]['default'];
-            
-            // Add code-specific analysis if code is selected
-            if (context.selection) {
-                response += '\n\n**Your code:**\n```javascript\n' + context.selection + '\n```';
+            try {
+                const GROQ_API_KEY = groqApiKey;
                 
-                // Add specific suggestions based on code
-                if (context.selection.includes('fetch') && !context.selection.includes('catch')) {
-                    response += '\n\n💡 **Suggestion**: Add `.catch()` to handle network errors.';
+                // Build a comprehensive prompt
+                let prompt = message;
+                
+                // If asking about code access, include the code
+                if (message.toLowerCase().includes('access') && message.toLowerCase().includes('code')) {
+                    if (context.fullCode) {
+                        prompt = `Yes, I can see your code. Here it is:\n\`\`\`javascript\n${context.fullCode}\n\`\`\`\n\nNow, ${message}`;
+                    } else {
+                        prompt = "I don't see any code open in the editor. Please open a file first.";
+                    }
+                } else if (context.selection) {
+                    prompt = `${message}\n\nSelected code:\n\`\`\`javascript\n${context.selection}\n\`\`\``;
+                } else if (context.fullCode && (message.toLowerCase().includes('code') || message.toLowerCase().includes('explain') || message.toLowerCase().includes('analyze'))) {
+                    prompt = `${message}\n\nCurrent file (${context.currentFile || 'untitled'}):\n\`\`\`javascript\n${context.fullCode}\n\`\`\``;
                 }
-                if (context.selection.includes('for') && context.selection.includes('push')) {
-                    response += '\n\n💡 **Suggestion**: Consider using `.map()` for transforming arrays.';
+                
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${GROQ_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'llama3-70b-8192',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are an expert coding assistant integrated into an IDE. You can see and analyze the code that users share with you. Always provide helpful, specific feedback about their code.'
+                            },
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('API request failed');
                 }
+                
+                const data = await response.json();
+                return data.choices[0].message.content;
+                
+            } catch (error) {
+                console.error('AI Error:', error);
+                return "I'm having trouble connecting to the AI service. Please check your API key and try again.";
             }
-            
-            return response;
         }
 
 
@@ -3757,38 +3856,62 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `ai-message ${sender}`;
             
-            // Convert markdown code blocks to HTML
+            // Convert markdown code blocks to HTML with proper formatting
             const formattedMessage = formatAIMessage(message);
             messageDiv.innerHTML = formattedMessage;
             
             chat.appendChild(messageDiv);
             chat.scrollTop = chat.scrollHeight;
             
-            // Add copy buttons to code blocks
+            // Add copy buttons to code blocks with proper formatting
             messageDiv.querySelectorAll('pre').forEach(pre => {
-                const copyBtn = document.createElement('button');
-                copyBtn.textContent = 'Copy';
-                copyBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; padding: 2px 8px; background: #007acc; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;';
-                copyBtn.onclick = () => {
-                    navigator.clipboard.writeText(pre.textContent);
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => copyBtn.textContent = 'Copy', 2000);
-                };
-                pre.style.position = 'relative';
-                pre.appendChild(copyBtn);
+                const codeElement = pre.querySelector('code');
+                if (codeElement) {
+                    // Get the raw text content and preserve formatting
+                    const codeText = codeElement.textContent;
+                    
+                    const copyBtn = document.createElement('button');
+                    copyBtn.textContent = 'Copy';
+                    copyBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; padding: 2px 8px; background: #007acc; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;';
+                    copyBtn.onclick = () => {
+                        // Copy the properly formatted code
+                        navigator.clipboard.writeText(codeText).then(() => {
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                        });
+                    };
+                    pre.style.position = 'relative';
+                    pre.appendChild(copyBtn);
+                }
             });
         }
         
         function formatAIMessage(message) {
-            // Convert markdown to HTML
-            return message
-                .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-                    return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
-                })
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // First, escape HTML to prevent XSS
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+            
+            // Process code blocks first to preserve their formatting
+            let formatted = message.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                // Preserve the code exactly as is, just escape HTML
+                return `<pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow-x: auto;"><code class="language-${lang || 'plaintext'}">${escapeHtml(code)}</code></pre>`;
+            });
+            
+            // Then process inline code
+            formatted = formatted.replace(/`([^`]+)`/g, '<code style="background: #1e1e1e; padding: 2px 4px; border-radius: 3px;">$1</code>');
+            
+            // Process other markdown
+            formatted = formatted
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/\n/g, '<br>');
+                .split('\n')
+                .map(line => line.trim() ? `<p style="margin: 5px 0;">${line}</p>` : '<br>')
+                .join('');
+            
+            return formatted;
         }
         
         function escapeHtml(text) {
@@ -3813,6 +3936,15 @@
         }
         
         function askAI(prompt) {
+            // Check if code is selected
+            if (editor) {
+                const selection = editor.getSelection();
+                if (selection.isEmpty() && prompt !== 'Explain this code') {
+                    // Auto-select all code if nothing is selected
+                    editor.setSelection(new monaco.Range(1, 1, editor.getModel().getLineCount(), 999999));
+                }
+            }
+            
             document.getElementById('aiInput').value = prompt;
             sendAIMessage();
         }
@@ -3842,11 +3974,11 @@
             
             try {
                 const analysis = await callOpenAI(
-                    'Analyze this code for potential bugs, performance issues, and best practice violations. Format as a list with severity levels.',
+                    'Analyze this code for bugs, performance issues, and improvements. Format your response with clear sections.',
                     { fullCode: code, currentFile }
                 );
                 
-                resultsDiv.innerHTML = `<div class="code-analysis">${formatAnalysisResults(analysis)}</div>`;
+                resultsDiv.innerHTML = `<div class="code-analysis">${formatAIMessage(analysis)}</div>`;
             } catch (error) {
                 resultsDiv.innerHTML = '<div class="analysis-item">Error analyzing code</div>';
             }
@@ -3878,7 +4010,14 @@
         async function refactorCode(type) {
             const selection = editor?.getSelection();
             if (!selection || selection.isEmpty()) {
-                alert('Please select code to refactor');
+                // Instead of alert, show a message in the refactor results
+                const resultsDiv = document.getElementById('refactorResults');
+                resultsDiv.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #888;">
+                        <p>Please select the code you want to refactor</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Highlight some code in the editor and try again</p>
+                    </div>
+                `;
                 return;
             }
             
