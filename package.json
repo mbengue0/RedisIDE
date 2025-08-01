@@ -1,7 +1,7 @@
 {
   "name": "redis-ide",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
@@ -10,7 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Redis-powered IDE with AI assistance",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
@@ -22,5 +22,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
