@@ -1,8 +1,11 @@
+require('dotenv').config(); 
 const redis = require('redis');
 
 let client;
 
 async function connectRedis() {
+    // Add this debug line to see what URL is being used
+    console.log('Connecting to Redis URL:', process.env.REDIS_URL);
     client = redis.createClient({
         url: process.env.REDIS_URL,
         socket: {
