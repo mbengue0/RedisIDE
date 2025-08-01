@@ -3,236 +3,4388 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redis IDE - Checkpoint 1</title>
+    <title>Redis IDE - AI Assistant Edition</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
         }
-        .container {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .controls {
-            margin-bottom: 20px;
+        
+        /* Fix the main layout */
+        .ide-container {
             display: flex;
-            gap: 10px;
-            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
         }
-        input[type="text"] {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
+        
+        .sidebar {
+            width: 250px;
+            min-width: 250px; /* Prevent shrinking */
+            max-width: 250px; /* Prevent growing */
+            background-color: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .project-selector {
+            width: 100%;
+            padding: 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
             border-radius: 4px;
-            font-size: 14px;
-            flex: 1;
-            max-width: 300px;
+            margin-bottom: 10px;
         }
-        button {
-            background-color: #007bff;
+        
+        .new-project-btn {
+            width: 100%;
+            padding: 8px;
+            background-color: #0e639c;
             color: white;
             border: none;
-            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
         }
-        button:hover {
-            background-color: #0056b3;
+        
+        .new-project-btn:hover {
+            background-color: #1177bb;
         }
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        textarea {
-            width: 100%;
-            height: 400px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        
+        /* File Tree */
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
             padding: 10px;
-            resize: vertical;
+            min-height: 100px;
+            position: relative;
         }
-        .status {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 4px;
-            display: none;
+        
+        .file-tree.drag-over {
+            background-color: rgba(0, 122, 204, 0.1);
+            outline: 2px dashed #007acc;
         }
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .file-list {
-            margin-top: 20px;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
-        }
-        .file-item {
-            padding: 8px;
-            margin: 4px 0;
-            background: #f8f9fa;
-            border-radius: 4px;
+        
+        .tree-item {
+            padding: 4px 8px;
             cursor: pointer;
             display: flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 3px;
+            font-size: 13px;
+            user-select: none;
+            transition: padding-left 0.2s ease;
+        }
+        
+        .tree-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .tree-item.selected {
+            background-color: #094771;
+        }
+        
+        .tree-item.folder.selected {
+            background-color: #37373d;
+        }
+        
+        .tree-item.drag-over {
+            background-color: #007acc !important;
+            outline: 2px solid #007acc;
+        }
+        
+        .tree-item[draggable="true"] {
+            cursor: move;
+        }
+        
+        .folder-arrow {
+            width: 12px;
+            font-size: 10px;
+            color: #cccccc;
+            cursor: pointer;
+            user-select: none;
+            display: inline-block;
+        }
+        
+        .folder-arrow:hover {
+            color: #ffffff;
+        }
+        
+        .tree-controls {
+            padding: 10px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 5px;
+            position: relative;
+        }
+        
+        .tree-controls::before {
+            content: attr(data-hint);
+            display: block;
+            position: absolute;
+            top: -20px;
+            left: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+        
+        .tree-controls button {
+            flex: 1;
+            padding: 6px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .tree-controls button:hover {
+            background-color: #484848;
+        }
+        
+        .editor-tabs {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            height: 35px;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 0 20px;
+            background-color: #2d2d30;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            min-width: 120px;
+        }
+        
+        .tab:hover {
+            background-color: #353537;
+        }
+        
+        .tab.active {
+            background-color: #1e1e1e;
+        }
+        
+        .tab-close {
+            margin-left: auto;
+            font-size: 16px;
+            color: #888;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        
+        .tab-close:hover {
+            color: #fff;
+        }
+        
+        .tab.dirty::after {
+            content: '•';
+            color: #fff;
+            margin-left: 5px;
+            font-size: 20px;
+            line-height: 0;
+        }
+        
+        #monaco-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+                
+       /* Fix status bar */
+        .status-bar {
+            width: 100%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
             justify-content: space-between;
         }
-        .file-item:hover {
-            background: #e9ecef;
+        
+        .status-message {
+            margin-right: auto;
         }
+        
+        .status-right {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            min-width: 400px;
+        }
+        
+        .modal-header {
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .modal input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .modal button {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .modal .primary {
+            background-color: #0e639c;
+            color: white;
+        }
+        
+        .modal .secondary {
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+        }
+        
+        /* Loading indicator */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #888;
+            font-size: 14px;
+        }
+        
+        /* Context Menu */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 4px 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            min-width: 150px;
+        }
+        
+        .context-menu-item {
+            padding: 6px 20px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #094771;
+        }
+        
+        .context-menu-separator {
+            height: 1px;
+            background-color: #3e3e42;
+            margin: 4px 0;
+        }
+        
+        /* Undo notification */
+        .undo-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #323233;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .undo-button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .undo-button:hover {
+            background-color: #1177bb;
+        }
+        /* Search Box */
+        .search-container {
+            padding: 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 6px 30px 6px 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 8px;
+            color: #888;
+            cursor: pointer;
+        }
+        
+        .search-filters {
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .search-filters label {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        .search-filters input[type="checkbox"] {
+            margin-right: 4px;
+        }
+        
+       /* Fix search panel if visible */
+        .search-results-panel {
+            width: 100%;
+            flex-shrink: 0; /* Don't shrink */
+        }
+        
+        .search-results-header {
+            padding: 8px 15px;
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .search-result-item {
+            padding: 8px 15px;
+            border-bottom: 1px solid #3e3e42;
+            cursor: pointer;
+        }
+        
+        .search-result-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .search-result-file {
+            color: #4ec9b0;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .search-result-content {
+            font-size: 12px;
+            color: #cccccc;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', monospace;
+            line-height: 1.4;
+        }
+        
+        .search-result-content mark {
+            background-color: #515c6a;
+            color: #ffffff;
+            font-weight: bold;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+        
+        /* Search status in status bar */
+        .search-status {
+            margin-right: 20px;
+            color: #cccccc;
+        }
+        
+        /* Make editor area flex to accommodate search panel */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0; /* Important: prevents overflow */
+            overflow: hidden;
+        }
+                
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Important for proper sizing */
+            overflow: hidden;
+        }
+
+        /* Ensure active users show properly */
+        .active-users {
+            position: fixed !important;
+            top: 10px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            position: relative;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.1);
+        }
+        
+        .user-avatar.active {
+            border-color: #fff;
+        }
+        
+        .user-tooltip {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            display: none;
+        }
+        
+        .user-avatar:hover .user-tooltip {
+            display: block;
+        }
+        
+        /* Collaboration Cursors */
+        .remote-cursor {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            transition: all 0.1s;
+            pointer-events: none;
+            z-index: 90;
+        }
+        
+        .remote-cursor::before {
+            content: attr(data-user);
+            position: absolute;
+            top: -20px;
+            left: 0;
+            background: inherit;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        
+        /* Selection highlights */
+        .remote-selection {
+            position: absolute;
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: 80;
+        }
+        
+        /* Live indicators */
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4CAF50;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        
+        /* Collaboration panel */
+        .collab-panel {
+            position: fixed;
+            right: 20px;
+            top: 60px;
+            width: 250px;
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            padding: 15px;
+            display: none;
+            z-index: 200;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .collab-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .user-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+        
+        .user-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+        
+        .user-status.idle {
+            background: #FFC107;
+        }
+        
+        /* Share dialog */
+        .share-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            padding: 20px;
+            display: none;
+            z-index: 1000;
+            min-width: 400px;
+        }
+        
+        .share-link {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .share-link input {
+            flex: 1;
+            padding: 8px;
+            background: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .copy-button {
+            padding: 8px 15px;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .copy-button:hover {
+            background: #1177bb;
+        }
+        
+        .copy-button.copied {
+            background: #4CAF50;
+        }
+
+        /* Add a Share button to the status bar */
+        .share-button {
+            padding: 4px 12px;
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        /* Add these NEW rules */
+        .monaco-editor {
+            width: 100% !important;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+        
+        /* AI Assistant Panel */
+        .ai-assistant-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background-color: #1e1e1e;
+            border-left: 1px solid #3e3e42;
+            display: none;
+            flex-direction: column;
+            z-index: 999;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .ai-assistant-panel.active {
+            display: flex;
+        }
+        
+        /* Fix AI panel header */
+        .ai-header {
+            padding: 15px;
+            padding-right: 50px; /* Add space for close button */
+            position: relative;
+        }
+        
+        .ai-header h3 {
+            margin: 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ai-close-btn {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+        }
+        
+        .ai-close-btn:hover {
+            color: #fff;
+        }
+        
+        .ai-tabs {
+            display: flex;
+            background-color: #252526;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .ai-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .ai-tab:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .ai-tab.active {
+            border-bottom-color: #007acc;
+            color: #007acc;
+        }
+        
+        .ai-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .ai-chat {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .ai-message {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            max-width: 90%;
+        }
+        
+        .ai-message.user {
+            background-color: #094771;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        
+        .ai-message.assistant {
+            background-color: #2d2d30;
+            border: 1px solid #3e3e42;
+        }
+        
+        .ai-message pre {
+            background-color: #1e1e1e;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 8px 0;
+            position: relative;
+            white-space: pre;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.4;
+        }
+        
+        .ai-message pre code {
+            background: none;
+            padding: 0;
+            white-space: pre;
+            display: block;
+        }
+
+        .ai-message code {
+            background-color: #1e1e1e;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            white-space: pre;
+        }
+        
+        .ai-input-container {
+            padding: 15px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .ai-input {
+            flex: 1;
+            padding: 8px;
+            background-color: #3c3c3c;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            font-size: 13px;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+        }
+        
+        .ai-send-btn {
+            padding: 8px 16px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            align-self: flex-end;
+        }
+        
+        .ai-send-btn:hover {
+            background-color: #1a86d3;
+        }
+        
+        .ai-send-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        
+        /* AI Suggestions */
+        .ai-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .ai-suggestion {
+            padding: 6px 12px;
+            background-color: #3c3c3c;
+            border: 1px solid #3e3e42;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .ai-suggestion:hover {
+            background-color: #484848;
+            border-color: #007acc;
+        }
+        
+        /* Code Analysis Results */
+        .code-analysis {
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .analysis-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .analysis-item:last-child {
+            border-bottom: none;
+        }
+        
+        .analysis-severity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .severity-error {
+            background-color: #5a1d1d;
+            color: #f48771;
+        }
+        
+        .severity-warning {
+            background-color: #5a4a1d;
+            color: #cca700;
+        }
+        
+        .severity-info {
+            background-color: #1d4a5a;
+            color: #75beff;
+        }
+        
+        /* AI Toggle Button */
+        .ai-toggle-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 60px;
+            width: 50px;
+            height: 50px;
+            background-color: #007acc;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 998;
+            transition: all 0.3s;
+        }
+        
+        .ai-toggle-btn:hover {
+            background-color: #1a86d3;
+            transform: scale(1.1);
+        }
+        
+        .ai-toggle-btn.active {
+            background-color: #f48771;
+        }
+        
+        /* Loading animation */
+        .ai-loading {
+            display: flex;
+            gap: 4px;
+            padding: 10px;
+            justify-content: center;
+        }
+        
+        .ai-loading span {
+            width: 8px;
+            height: 8px;
+            background-color: #007acc;
+            border-radius: 50%;
+            animation: ai-pulse 1.4s ease-in-out infinite;
+        }
+        
+        .ai-loading span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .ai-loading span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes ai-pulse {
+            0%, 80%, 100% {
+                opacity: 0.3;
+                transform: scale(0.8);
+            }
+            40% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+       /* Move active users below when AI panel is open */
+        .ai-panel-open .active-users {
+            top: 60px !important;
+        }
+
+        /* Better styling for Analyze tab */
+        #aiAnalyzeTab button {
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 15px;
+        }
+
+        #aiAnalyzeTab button:hover {
+            background-color: #1a86d3;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+        }
+
+        #aiAnalyzeTab button:active {
+            transform: translateY(0);
+        }
+
+        /* Style the analysis results */
+        #analysisResults {
+            background-color: #252526;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .code-analysis h3 {
+            color: #ffffff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .code-analysis h4 {
+            color: #cccccc;
+            font-size: 14px;
+            margin: 15px 0 10px 0;
+        }
+
+        .code-analysis p {
+            color: #d4d4d4;
+            line-height: 1.5;
+            margin: 8px 0;
+        }
+
+        /* Terminal Styles */
+        .terminal-container {
+            position: fixed;
+            bottom: 22px;
+            left: 0;
+            right: 0;
+            height: 250px;
+            background-color: #1e1e1e;
+            border-top: 2px solid #007acc;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .terminal-container.show {
+            display: flex;
+        }
+
+        body.terminal-open .ide-container {
+            margin-bottom: 250px;
+            height: calc(100vh - 250px);
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #2d2d30;
+            padding: 5px 10px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .terminal-body {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #1e1e1e;
+        }
+
+        .terminal-output {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        .terminal-output > div {
+            margin: 2px 0;
+        }
+
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .terminal-prompt {
+            color: #4ec9b0;
+            margin-right: 5px;
+        }
+
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .terminal-btn {
+            margin-right: 10px;
+            padding: 4px 10px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+     
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 Redis IDE - Checkpoint 1</h1>
-        
-        <div class="controls">
-            <input type="text" id="filename" placeholder="Enter filename (e.g., index.js)" value="hello.js">
-            <button onclick="saveFile()">Save File</button>
-            <button onclick="loadFile()">Load File</button>
-            <button onclick="listFiles()">List All Files</button>
-        </div>
-        
-        <textarea id="editor" placeholder="// Write your code here...">console.log("Hello from Redis IDE!");
-
-// This file is stored entirely in Redis
-// Try saving and loading it!</textarea>
-        
-        <div id="status" class="status"></div>
-        
-        <div class="file-list">
-            <h3>Files in Redis:</h3>
-            <div id="fileList"></div>
-        </div>
-    </div>
-    <!-- Add this after your existing content in index.html -->
-    <div class="container" style="margin-top: 20px;">
-        <h2>🚀 Checkpoint 2: Project-Based IDE</h2>
-        <p>Ready for the full IDE experience with projects and file organization?</p>
-        <a href="project.html" style="
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            margin-top: 10px;
-        ">Open Project IDE →</a>
-    </div>
-    <script>
-        const API_URL = 'http://localhost:3000/api';
-        
-        function showStatus(message, isError = false) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = `status ${isError ? 'error' : 'success'}`;
-            status.style.display = 'block';
+    <div class="ide-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <select id="projectSelector" class="project-selector">
+                    <option value="">Select a project...</option>
+                </select>
+                <button class="new-project-btn" onclick="showNewProjectModal()">+ New Project</button>
+            </div>
             
+            <!-- Search Box -->
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input" 
+                           placeholder="Search in project... (Ctrl+Shift+F)"
+                           onkeypress="handleSearchKeypress(event)">
+                    <span class="search-icon" onclick="performSearch()">🔍</span>
+                </div>
+                <div class="search-filters">
+                    <label>
+                        <input type="checkbox" id="searchCurrentProject" checked>
+                        Current project only
+                    </label>
+                </div>
+            </div>
+            
+            <div class="file-tree" id="fileTree">
+                <div style="padding: 20px; text-align: center; color: #888;">
+                    Select or create a project
+                </div>
+            </div>
+            
+            <div class="tree-controls" id="treeControls" data-hint="📁 root">
+                <button onclick="showNewFileModal()">📄 New File</button>
+                <button onclick="showNewFolderModal()">📁 New Folder</button>
+            </div>
+        </div>
+        
+        <!-- Main Content Area (ONLY ONE!) -->
+        <div class="main-content">
+            <!-- Active Users Display -->
+            <div class="active-users" id="activeUsers"></div>
+            
+            <!-- Search Results Panel -->
+            <div id="searchResultsPanel" class="search-results-panel">
+                <div class="search-results-header">
+                    <span id="searchResultsCount">0 results</span>
+                    <span style="cursor: pointer;" onclick="closeSearchResults()">✕</span>
+                </div>
+                <div id="searchResultsList"></div>
+            </div>
+            
+            <!-- Editor Area -->
+            <div class="editor-area">
+                <div class="editor-tabs" id="editorTabs">
+                    <!-- Tabs will be added dynamically -->
+                </div>
+                
+                <div id="monaco-container">
+                    <div class="loading" id="loading">Loading Monaco Editor...</div>
+                </div>
+                
+                <div class="status-bar">
+                    <span class="status-message" id="statusMessage">Ready</span>
+                    <span class="search-status" id="searchStatus"></span>
+                    <button class="terminal-btn" onclick="openTerminal()">🖥 Terminal</button>
+                    <button class="share-button" onclick="showShareDialog()">Share Project</button>
+                    <div class="status-right">
+                        <span id="cursorPosition">Ln 1, Col 1</span>
+                        <span id="languageMode">JavaScript</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Collaboration Panel (floating) -->
+    <div class="collab-panel" id="collabPanel">
+        <h3>Active Collaborators <span class="live-indicator"></span></h3>
+        <ul class="user-list" id="userList"></ul>
+        <button class="share-button" onclick="showShareDialog()">Share Project</button>
+    </div>
+    
+    <!-- Share Dialog (floating) -->
+    <div class="share-dialog" id="shareDialog">
+        <h3>Share this project</h3>
+        <p>Anyone with this link can collaborate in real-time:</p>
+        <div class="share-link">
+            <input type="text" id="shareLink" readonly>
+            <button class="copy-button" onclick="copyShareLink()">Copy</button>
+        </div>
+        <button onclick="closeShareDialog()">Close</button>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="startInlineRename()">
+            <span>✏️</span>
+            <span>Rename (F2)</span>
+        </div>
+        <div class="context-menu-item" onclick="deleteItem()">
+            <span>🗑️</span>
+            <span>Delete</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="newFileInFolder()">
+            <span>📄</span>
+            <span>New File</span>
+        </div>
+        <div class="context-menu-item" onclick="newFolderInFolder()">
+            <span>📁</span>
+            <span>New Folder</span>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="newProjectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Project</div>
+            <input type="text" id="newProjectName" placeholder="Project name">
+            <input type="text" id="newProjectDescription" placeholder="Description (optional)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newProjectModal')">Cancel</button>
+                <button class="primary" onclick="createProject()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="newFileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New File</div>
+            <input type="text" id="newFilePath" placeholder="File path (e.g., src/index.js)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newFileModal')">Cancel</button>
+                <button class="primary" onclick="createFile()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="newFolderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Folder</div>
+            <input type="text" id="newFolderPath" placeholder="Folder path (e.g., src/components)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+                <button class="primary" onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI Toggle Button -->
+    <div class="ai-toggle-btn" onclick="toggleAIPanel()" title="AI Assistant (Ctrl+Shift+A)">
+        🤖
+    </div>
+    
+    <!-- AI Assistant Panel -->
+    <div class="ai-assistant-panel" id="aiAssistantPanel">
+        <div class="ai-header">
+            <h3><span>🤖</span> AI Assistant</h3>
+            <button class="ai-close-btn" onclick="toggleAIPanel()">×</button>
+        </div>
+        
+        <div class="ai-tabs">
+            <div class="ai-tab active" onclick="switchAITab('chat')">Chat</div>
+            <div class="ai-tab" onclick="switchAITab('analyze')">Analyze</div>
+            <div class="ai-tab" onclick="switchAITab('refactor')">Refactor</div>
+        </div>
+        
+        <div class="ai-content">
+            <!-- Chat Tab -->
+            <div id="aiChatTab" class="ai-tab-content">
+                <div class="ai-suggestions">
+                    <div class="ai-suggestion" onclick="askAI('Explain this code')">Explain code</div>
+                    <div class="ai-suggestion" onclick="askAI('Find bugs')">Find bugs</div>
+                    <div class="ai-suggestion" onclick="askAI('Optimize performance')">Optimize</div>
+                    <div class="ai-suggestion" onclick="askAI('Add comments')">Add comments</div>
+                </div>
+                
+                <div class="ai-chat" id="aiChat">
+                    <div class="ai-message assistant">
+                        👋 Hi! I'm your AI coding assistant. I can help you:
+                        <ul>
+                            <li>Explain code</li>
+                            <li>Find and fix bugs</li>
+                            <li>Suggest optimizations</li>
+                            <li>Write documentation</li>
+                            <li>Refactor code</li>
+                        </ul>
+                        Select some code and ask me anything!
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analyze Tab -->
+            <div id="aiAnalyzeTab" class="ai-tab-content" style="display: none;">
+                <button onclick="analyzeCurrentFile()">Analyze Current File</button>
+                <div id="analysisResults"></div>
+            </div>
+            
+            <!-- Refactor Tab -->
+            <div id="aiRefactorTab" class="ai-tab-content" style="display: none;">
+                <div style="padding: 10px; background: #252526; border-radius: 6px; margin-bottom: 15px;">
+                    <p style="color: #cccccc; font-size: 13px; margin: 0;">
+                        Select code in the editor, then choose a refactoring option:
+                    </p>
+                </div>
+                <div class="ai-suggestions">
+                    <div class="ai-suggestion" onclick="refactorCode('extract-function')">Extract Function</div>
+                    <div class="ai-suggestion" onclick="refactorCode('simplify')">Simplify</div>
+                    <div class="ai-suggestion" onclick="refactorCode('modern-syntax')">Modernize</div>
+                    <div class="ai-suggestion" onclick="refactorCode('add-types')">Add Types</div>
+                </div>
+                <div id="refactorResults"></div>
+            </div>
+        </div>
+        
+        <div class="ai-input-container">
+            <textarea 
+                class="ai-input" 
+                id="aiInput" 
+                placeholder="Ask me anything about your code..."
+                onkeydown="handleAIInputKeydown(event)"
+            ></textarea>
+            <button class="ai-send-btn" id="aiSendBtn" onclick="sendAIMessage()">Send</button>
+        </div>
+    </div>
+    <!-- Terminal HTML -->
+    <div class="terminal-container" id="terminalContainer">
+        <div class="terminal-header">
+            <div class="terminal-tabs">
+                <div class="terminal-tab active">
+                    <span>Terminal</span>
+                </div>
+            </div>
+            <div class="terminal-actions">
+                <button onclick="clearTerminal()" title="Clear">🗑️</button>
+                <button onclick="closeTerminal()" title="Close">×</button>
+            </div>
+        </div>
+        <div class="terminal-body" id="terminalBody">
+            <div class="terminal-output" id="terminalOutput"></div>
+            <div class="terminal-input-line">
+                <span class="terminal-prompt">$ </span>
+                <input type="text" 
+                    class="terminal-input" 
+                    id="terminalInput" 
+                    autocomplete="off" 
+                    onkeydown="if(event.key === 'Enter' && this.value.trim()) { 
+                        writeToTerminal('$ ' + this.value, 'terminal-prompt'); 
+                        processTerminalCommand(this.value.trim()); 
+                        this.value = ''; 
+                    }">
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this RIGHT BEFORE </body> in your ai-ide.html -->
+    <div id="simpleTerminal" style="position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: #1e1e1e; border-top: 3px solid #007acc; display: none; z-index: 9999;">
+        <div style="padding: 10px; height: 100%; display: flex; flex-direction: column;">
+            <div style="flex: 1; overflow-y: auto; font-family: monospace; color: #ccc;" id="termOut"></div>
+            <div style="display: flex; align-items: center;">
+                <span style="color: #4ec9b0;">$ </span>
+                <input id="termIn" type="text" style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: monospace; margin-left: 5px;">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    
+    <script>
+        
+        // Global terminal command processor
+        window.processTerminalCommand = function(command) {
+            console.log('Processing command:', command);
+            const [cmd, ...args] = command.split(' ');
+            
+            switch(cmd.toLowerCase()) {
+                case 'help':
+                    writeToTerminal('Available commands:', 'terminal-info');
+                    writeToTerminal('  help     - Show this help');
+                    writeToTerminal('  clear    - Clear terminal');
+                    writeToTerminal('  echo     - Echo text');
+                    writeToTerminal('  ls       - List files');
+                    break;
+                    
+                case 'clear':
+                    document.getElementById('terminalOutput').innerHTML = '';
+                    break;
+                    
+                case 'echo':
+                    writeToTerminal(args.join(' ') || 'Echo: no text provided');
+                    break;
+                    
+                case 'ls':
+                    writeToTerminal('src/  components/  utils/  package.json  README.md');
+                    break;
+                    
+                default:
+                    writeToTerminal('Command not found: ' + cmd, 'terminal-error');
+            }
+        };
+
+        
+        let aiConversation = [];
+        let isAIProcessing = false;
+        const API_URL = 'http://localhost:3000/api';
+        let socket = null;
+        let sessionId = null;
+        let currentUser = null;
+        let collaborators = new Map();
+         // Override Monaco initialization to add collaboration
+        let isApplyingRemoteChange = false;
+        let remoteDecorations = new Map();
+        let isConnected = false;
+        let currentProject = null;
+        let openFiles = new Map(); // filepath -> {content, model, viewState, dirty}
+        let currentFile = null;
+        let editor = null;
+        let monaco = null;
+        let currentFolder = null;
+        let expandedFolders = new Set();
+        let isRenaming = false;
+        let renameTimeout = null;
+        let contextMenuTarget = null;
+        let contextMenuType = null;
+        let lastContextElement = null;
+        let draggedItem = null;
+        let draggedItemPath = null;
+        let draggedItemType = null;
+        let undoTimeout = null;
+        let searchResults = [];
+        // Terminal System
+        let terminalHistory = [];
+        let historyIndex = 0;
+
+        // Get Groq API key from localStorage or prompt user
+        let groqApiKey = localStorage.getItem('groq_api_key') || '';
+
+        // Function to set API key
+        function setGroqAPIKey() {
+            const key = prompt('Enter your Groq API key:');
+            if (key) {
+                groqApiKey = key;
+                localStorage.setItem('groq_api_key', key);
+                alert('API key saved!');
+            }
+        }
+
+        // Check if API key exists on load
+        if (!groqApiKey) {
             setTimeout(() => {
-                status.style.display = 'none';
-            }, 3000);
+                if (confirm('No Groq API key found. Would you like to add one now?')) {
+                    setGroqAPIKey();
+                }
+            }, 1000);
         }
         
-        async function saveFile() {
-            const filename = document.getElementById('filename').value;
-            const content = document.getElementById('editor').value;
+        // Configure Monaco loader
+        require.config({ 
+            paths: { 
+                'vs': 'https://unpkg.com/monaco-editor@0.45.0/min/vs' 
+            }
+        });
+
+        // Initialize Monaco and the app
+        require(['vs/editor/editor.main'], function() {
+            monaco = window.monaco;
+            initializeEditor();
+            initializeApp();
+        });
+
+        // Initialize app
+        async function initializeApp() {
+            await loadProjects();
+            setupEventListeners();
+            setupKeyboardShortcuts();
+            updateTreeControlsHint();
+            createProjectDropdown();
+            initializeCollaboration();
+        }
+
+        // Add find/replace support
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+                editor.getAction('actions.find').run();
+            });
             
-            if (!filename) {
-                showStatus('Please enter a filename', true);
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+                editor.getAction('editor.action.startFindReplaceAction').run();
+            });
+        
+        // Open file with Monaco
+        async function openFile(filepath) {
+            if (!currentProject) return;
+            
+            // Check if file is already open
+            if (openFiles.has(filepath)) {
+                switchToFile(filepath);
                 return;
             }
             
             try {
-                const response = await fetch(`${API_URL}/files`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ filename, content })
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(filepath)}`);
+                const data = await response.json();
+                
+                // Create Monaco model for the file
+                const language = getLanguageMode(filepath);
+                const model = monaco.editor.createModel(data.content, language);
+                
+                // Store file data
+                openFiles.set(filepath, {
+                    content: data.content,
+                    model: model,
+                    viewState: null,
+                    dirty: false
                 });
                 
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showStatus(`✅ ${data.message}`);
-                    listFiles(); // Refresh file list
-                } else {
-                    showStatus(`❌ Error: ${data.error}`, true);
-                }
+                switchToFile(filepath);
+                updateStatus(`Opened: ${filepath}`);
             } catch (error) {
-                showStatus(`❌ Error: ${error.message}`, true);
+                console.error('Error opening file:', error);
+                updateStatus('Error opening file', true);
             }
         }
         
-        async function loadFile() {
-            const filename = document.getElementById('filename').value;
+        // Simple terminal that WILL work
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                const term = document.getElementById('simpleTerminal');
+                term.style.display = term.style.display === 'none' ? 'block' : 'none';
+                if (term.style.display === 'block') {
+                    document.getElementById('termIn').focus();
+                }
+            }
+        });
+
+        document.getElementById('termIn').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const cmd = this.value;
+                const out = document.getElementById('termOut');
+                out.innerHTML += '<div>$ ' + cmd + '</div>';
+                
+                if (cmd === 'help') {
+                    out.innerHTML += '<div>Commands: help, clear, demo</div>';
+                } else if (cmd === 'clear') {
+                    out.innerHTML = '';
+                } else if (cmd === 'demo') {
+                    out.innerHTML += '<div style="color:#4ec9b0">Redis IDE Terminal v1.0</div>';
+                    out.innerHTML += '<div>Your amazing IDE is ready for presentation!</div>';
+                }
+                
+                this.value = '';
+                out.scrollTop = out.scrollHeight;
+            }
+        });
+
+        // Also add a floating button
+        const btn = document.createElement('div');
+        btn.innerHTML = 'Terminal';
+        btn.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#007acc;color:white;padding:10px 20px;border-radius:5px;cursor:pointer;z-index:9999;';
+        btn.onclick = function() {
+            const term = document.getElementById('simpleTerminal');
+            term.style.display = term.style.display === 'none' ? 'block' : 'none';
+        };
+        document.body.appendChild(btn);
+
+        // Switch to an already open file
+        function switchToFile(filepath) {
+            const fileData = openFiles.get(filepath);
+            if (!fileData) return;
             
-            if (!filename) {
-                showStatus('Please enter a filename', true);
+            // Save current view state
+            if (currentFile && openFiles.has(currentFile)) {
+                const currentData = openFiles.get(currentFile);
+                currentData.viewState = editor.saveViewState();
+            }
+            
+            // Switch to new file
+            currentFile = filepath;
+            editor.setModel(fileData.model);
+            
+            // Restore view state if available
+            if (fileData.viewState) {
+                editor.restoreViewState(fileData.viewState);
+            }
+            
+            // Update UI
+            updateTabs();
+            updateFileTree();
+            
+            // Update language mode display
+            const language = getLanguageMode(filepath);
+            document.getElementById('languageMode').textContent = 
+                language.charAt(0).toUpperCase() + language.slice(1);
+        }
+
+        // Save current file
+        async function saveCurrentFile() {
+            if (!currentFile || !currentProject) return;
+            
+            const fileData = openFiles.get(currentFile);
+            if (!fileData || !fileData.dirty) return;
+            
+            try {
+                const content = fileData.content;
+                const response = await fetch(
+                    `${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(currentFile)}`, 
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content })
+                    }
+                );
+                
+                if (response.ok) {
+                    fileData.dirty = false;
+                    updateTabs();
+                    updateStatus(`Saved: ${currentFile}`);
+                }
+            } catch (error) {
+                console.error('Error saving file:', error);
+                updateStatus('Error saving file', true);
+            }
+        }
+
+        // Update editor tabs
+        function updateTabs() {
+            const tabsContainer = document.getElementById('editorTabs');
+            tabsContainer.innerHTML = '';
+            
+            openFiles.forEach((fileData, filepath) => {
+                const filename = filepath.split('/').pop();
+                const tab = document.createElement('div');
+                tab.className = `tab ${filepath === currentFile ? 'active' : ''} ${fileData.dirty ? 'dirty' : ''}`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = filename;
+                nameSpan.onclick = () => switchToFile(filepath);
+                
+                const closeSpan = document.createElement('span');
+                closeSpan.className = 'tab-close';
+                closeSpan.textContent = '×';
+                closeSpan.onclick = (e) => {
+                    e.stopPropagation();
+                    closeFile(filepath);
+                };
+                
+                tab.appendChild(nameSpan);
+                tab.appendChild(closeSpan);
+                tabsContainer.appendChild(tab);
+            });
+        }
+
+        // Close file
+        function closeFile(filepath) {
+            const fileData = openFiles.get(filepath);
+            
+            if (fileData && fileData.dirty) {
+                if (!confirm(`Save changes to ${filepath.split('/').pop()} before closing?`)) {
+                    // Don't save
+                } else {
+                    // Save before closing
+                    saveCurrentFile();
+                }
+            }
+            
+            // Dispose of the model
+            if (fileData && fileData.model) {
+                fileData.model.dispose();
+            }
+            
+            openFiles.delete(filepath);
+            
+            if (filepath === currentFile) {
+                // Switch to another open file or clear editor
+                const remainingFiles = Array.from(openFiles.keys());
+                if (remainingFiles.length > 0) {
+                    switchToFile(remainingFiles[remainingFiles.length - 1]);
+                } else {
+                    currentFile = null;
+                    editor.setModel(null);
+                    editor.setValue('// No files open');
+                }
+            }
+            
+            updateTabs();
+        }
+
+        // Add all the other functions from Checkpoint 2
+        // Just copy and paste all the working functions here
+        // Replace the showUndoNotification function
+        function showUndoNotification(itemName, itemType, restoreFunction) {
+            // Clear any existing notification
+            const existing = document.querySelector('.undo-notification');
+            if (existing) existing.remove();
+            
+            // Clear any existing timeout
+            if (undoTimeout) {
+                clearTimeout(undoTimeout);
+            }
+            
+            const notification = document.createElement('div');
+            notification.className = 'undo-notification';
+            notification.innerHTML = `
+                <span>Deleted ${itemType} "${itemName}"</span>
+                <button class="undo-button">Undo</button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Add click handler directly to the button
+            const undoButton = notification.querySelector('.undo-button');
+            undoButton.addEventListener('click', async () => {
+                try {
+                    await restoreFunction();
+                    notification.remove();
+                    if (undoTimeout) {
+                        clearTimeout(undoTimeout);
+                    }
+                } catch (error) {
+                    console.error('Error undoing delete:', error);
+                    updateStatus('Failed to undo deletion', true);
+                }
+            });
+            
+            // Auto-remove after 5 seconds
+            undoTimeout = setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Undo delete function
+        async function undoDelete() {
+            if (window.currentUndo) {
+                await window.currentUndo();
+                document.querySelector('.undo-notification')?.remove();
+                window.currentUndo = null;
+            }
+        }
+
+        function enableInlineRename(element, currentPath, type) {
+            if (isRenaming) return;
+            
+            isRenaming = true;
+            const originalName = currentPath.split('/').pop();
+            const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            
+            // Create input element
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = originalName;
+            input.style.cssText = `
+                background: #3c3c3c;
+                border: 1px solid #007acc;
+                color: #cccccc;
+                padding: 2px 5px;
+                font-size: 13px;
+                font-family: inherit;
+                width: 150px;
+            `;
+            
+            // Replace the span with input
+            const nameSpan = element.querySelector('span:last-child');
+            const originalContent = nameSpan.textContent;
+            nameSpan.textContent = '';
+            nameSpan.appendChild(input);
+            
+            input.focus();
+            input.select();
+            
+            // Handle save
+            const saveRename = async () => {
+                const newName = input.value.trim();
+                
+                if (newName && newName !== originalName) {
+                    const newPath = basePath ? basePath + '/' + newName : newName;
+                    
+                    try {
+                        const response = await fetch(`${API_URL}/projects/${currentProject.id}/rename`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                oldPath: currentPath, 
+                                newPath: newPath, 
+                                isFolder: type === 'folder' 
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            updateStatus(`Renamed to ${newName}`);
+                            await loadProjectFiles();
+                            
+                            // Update open files if needed
+                            if (type === 'file' && openFiles.has(currentPath)) {
+                                const content = openFiles.get(currentPath);
+                                openFiles.delete(currentPath);
+                                openFiles.set(newPath, content);
+                                if (currentFile === currentPath) {
+                                    currentFile = newPath;
+                                    updateTabs();
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error renaming:', error);
+                        updateStatus('Error renaming', true);
+                    }
+                }
+                
+                nameSpan.textContent = originalContent;
+                isRenaming = false;
+            };
+            
+            // Handle cancel
+            const cancelRename = () => {
+                nameSpan.textContent = originalContent;
+                isRenaming = false;
+            };
+            
+            input.addEventListener('blur', saveRename);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveRename();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelRename();
+                }
+            });
+        }
+
+        // Update your setupKeyboardShortcuts function with better debugging
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', async (e) => {
+                // Log all keypresses for debugging
+                if (e.key === 'F2' || e.key === 'Delete') {
+                    console.log('Key pressed:', e.key);
+                    console.log('contextMenuTarget:', contextMenuTarget);
+                    console.log('lastContextElement:', window.lastContextElement);
+                }
+                
+                // F2 for rename
+                if (e.key === 'F2') {
+                    e.preventDefault();
+                    if (contextMenuTarget) {
+                        // Find the element by data-path attribute
+                        const element = document.querySelector(`[data-path="${contextMenuTarget}"]`);
+                        if (element) {
+                            window.lastContextElement = element;
+                            startInlineRename();
+                        } else {
+                            console.log('Could not find element for path:', contextMenuTarget);
+                        }
+                    } else {
+                        console.log('No file/folder selected. Right-click to select first.');
+                    }
+                }
+                
+                // Delete key
+                if (e.key === 'Delete') {
+                    e.preventDefault();
+                    if (contextMenuTarget) {
+                        await smartDelete();
+                    } else {
+                        console.log('No file/folder selected. Right-click to select first.');
+                    }
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+Shift+F for global search
+                if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+                    e.preventDefault();
+                    document.getElementById('searchInput').focus();
+                }
+            });
+        }
+        
+        // Search functionality
+        function handleSearchKeypress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+            
+            const searchCurrentProject = document.getElementById('searchCurrentProject').checked;
+            
+            updateStatus('Searching...');
+            document.getElementById('searchStatus').textContent = '🔍 Searching...';
+            
+            try {
+                const url = searchCurrentProject && currentProject
+                    ? `${API_URL}/projects/${currentProject.id}/search`
+                    : `${API_URL}/search`;
+                
+                const response = await fetch(`${url}?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                
+                searchResults = results.documents || [];
+                displaySearchResults(results);
+                
+                const statusText = results.fallback 
+                    ? `Found ${results.total} results (fallback search)`
+                    : `Found ${results.total} results`;
+                
+                updateStatus(statusText);
+                document.getElementById('searchStatus').textContent = '';
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                updateStatus('Search failed', true);
+                document.getElementById('searchStatus').textContent = '';
+            }
+        }
+        
+        function displaySearchResults(results) {
+            const panel = document.getElementById('searchResultsPanel');
+            const list = document.getElementById('searchResultsList');
+            const count = document.getElementById('searchResultsCount');
+            
+            if (results.total === 0) {
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No results found</div>';
+            } else {
+                list.innerHTML = results.documents.map((doc, index) => `
+                    <div class="search-result-item" onclick="openSearchResult(${index})">
+                        <div class="search-result-file">${doc.filepath}</div>
+                        <div class="search-result-content">${doc.content || doc.snippet || ''}</div>
+                    </div>
+                `).join('');
+            }
+            
+            count.textContent = `${results.total} result${results.total !== 1 ? 's' : ''} for "${results.query}"`;
+            panel.style.display = 'block';
+        }
+        
+        function closeSearchResults() {
+            document.getElementById('searchResultsPanel').style.display = 'none';
+        }
+        
+        async function openSearchResult(index) {
+            const result = searchResults[index];
+            if (!result) return;
+            
+            // Extract project ID from the result
+            const projectId = result.projectId || result.key.split(':')[1];
+            
+            // If it's from a different project, load that project first
+            if (projectId !== currentProject?.id) {
+                await loadProject(projectId);
+            }
+            
+            // Open the file
+            await openFile(result.filepath);
+            
+            // Try to jump to the search term in the file
+            const searchTerm = document.getElementById('searchInput').value;
+            if (searchTerm && editor) {
+                const model = editor.getModel();
+                const matches = model.findMatches(searchTerm, true, false, false, null, true);
+                
+                if (matches.length > 0) {
+                    editor.setSelection(matches[0].range);
+                    editor.revealRangeInCenter(matches[0].range);
+                }
+            }
+        }
+
+        // Also update smartDelete to use the same undo functionality
+        async function smartDelete() {
+            // Just call deleteItem since they should have the same behavior
+            await deleteItem();
+        }
+
+        // 4. Project Management in Dropdown
+        function createProjectDropdown() {
+            const selector = document.getElementById('projectSelector');
+            
+            // Add event listener for right-click on options
+            selector.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (e.target.tagName === 'OPTION' && e.target.value) {
+                    showProjectContextMenu(e, e.target.value, e.target.textContent);
+                }
+            });
+        }
+
+        function showProjectContextMenu(event, projectId, projectName) {
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.cssText = `
+                display: block;
+                left: ${event.pageX}px;
+                top: ${event.pageY}px;
+            `;
+            
+            menu.innerHTML = `
+                <div class="context-menu-item" onclick="renameProjectPrompt('${projectId}', '${projectName}')">
+                    <span class="icon">✏️</span>
+                    <span>Rename Project</span>
+                </div>
+                <div class="context-menu-item" onclick="deleteProjectPrompt('${projectId}', '${projectName}')">
+                    <span class="icon">🗑️</span>
+                    <span>Delete Project</span>
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // Remove on click outside
+            setTimeout(() => {
+                document.addEventListener('click', () => menu.remove(), { once: true });
+            }, 0);
+        }
+
+        async function renameProjectPrompt(projectId, oldName) {
+            const newName = prompt('New project name:', oldName);
+            if (!newName || newName === oldName) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Project renamed to ${newName}`);
+                    await loadProjects();
+                    if (currentProject && currentProject.id === projectId) {
+                        currentProject.name = newName;
+                    }
+                }
+            } catch (error) {
+                console.error('Error renaming project:', error);
+                updateStatus('Error renaming project', true);
+            }
+        }
+
+        async function deleteProjectPrompt(projectId, projectName) {
+            if (!confirm(`Delete project "${projectName}" and ALL its files? This cannot be undone.`)) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Project ${projectName} deleted`);
+                    if (currentProject && currentProject.id === projectId) {
+                        currentProject = null;
+                        openFiles.clear();
+                        currentFile = null;
+                        document.getElementById('fileTree').innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Select a project</div>';
+                        document.getElementById('editor').value = '';
+                        updateTabs();
+                    }
+                    await loadProjects();
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+                updateStatus('Error deleting project', true);
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Click outside context menu to close
+            document.addEventListener('click', () => {
+                document.getElementById('contextMenu').style.display = 'none';
+            });
+            
+            // File tree click handler for deselection
+            document.getElementById('fileTree').addEventListener('click', (e) => {
+                if (e.target.id === 'fileTree' || e.target.classList.contains('empty-message')) {
+                    currentFolder = null;
+                    document.querySelectorAll('.tree-item.folder').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    updateTreeControlsHint();
+                    updateStatus('No folder selected');
+                }
+            });
+            
+            // File tree drag handlers
+            const fileTree = document.getElementById('fileTree');
+            fileTree.addEventListener('dragover', handleDragOver);
+            fileTree.addEventListener('drop', (e) => {
+                if (e.target === fileTree || e.target.classList.contains('empty-message')) {
+                    handleDrop(e, '', 'root');
+                }
+            });
+            fileTree.addEventListener('dragenter', (e) => {
+                if (e.target === e.currentTarget) {
+                    e.currentTarget.classList.add('drag-over');
+                }
+            });
+            fileTree.addEventListener('dragleave', (e) => {
+                if (e.target === e.currentTarget) {
+                    e.currentTarget.classList.remove('drag-over');
+                }
+            });
+            
+            // Modal Enter key handlers
+            document.querySelectorAll('.modal input').forEach(input => {
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const modal = input.closest('.modal');
+                        const primaryButton = modal.querySelector('.primary');
+                        primaryButton.click();
+                    }
+                });
+            });
+            
+            // Click outside modal to close
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // Load projects
+        async function loadProjects() {
+            try {
+                const response = await fetch(`${API_URL}/projects`);
+                const data = await response.json();
+                
+                const selector = document.getElementById('projectSelector');
+                selector.innerHTML = '<option value="">Select a project...</option>';
+                
+                data.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    selector.appendChild(option);
+                });
+                
+                selector.onchange = () => {
+                    if (selector.value) {
+                        loadProject(selector.value);
+                    }
+                };
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                updateStatus('Error loading projects', true);
+            }
+        }
+
+        // Load project
+        async function loadProject(projectId) {
+            try {
+                // Clear state when switching projects
+                openFiles.clear();
+                currentFile = null;
+                currentFolder = null;
+                expandedFolders.clear();
+                updateTabs();
+                
+                const response = await fetch(`${API_URL}/projects/${projectId}`);
+                const data = await response.json();
+                
+                currentProject = data.project;
+                
+                // Auto-expand root level folders
+                if (currentProject.files) {
+                    Object.keys(currentProject.files).forEach(key => {
+                        if (currentProject.files[key].type === 'folder' || currentProject.files[key].children) {
+                            expandedFolders.add(key);
+                        }
+                    });
+                }
+                currentProject = data.project;
+    
+                // JOIN THE COLLABORATION ROOM
+                if (socket && isConnected) {
+                    socket.emit('join-project', {
+                        projectId: currentProject.id,
+                        user: currentUser
+                    });
+                    console.log('Joined project room on load');
+                }
+
+                await loadProjectFiles();
+                updateStatus(`Loaded project: ${currentProject.name}`);
+            } catch (error) {
+                console.error('Error loading project:', error);
+                updateStatus('Error loading project', true);
+            }
+        }
+
+        // Load project files
+        async function loadProjectFiles() {
+            if (!currentProject) return;
+            
+            try {
+                // Get the complete project data including folder structure
+                const projectResponse = await fetch(`${API_URL}/projects/${currentProject.id}`);
+                const projectData = await projectResponse.json();
+                
+                const fileTree = document.getElementById('fileTree');
+                
+                if (projectData.project && projectData.project.files) {
+                    const treeHtml = renderTreeNodes(projectData.project.files, 0);
+                    fileTree.innerHTML = treeHtml || '<div style="padding: 20px; text-align: center; color: #888;">Empty project. Create files or folders!</div>';
+                } else {
+                    fileTree.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files yet. Create your first file!</div>';
+                }
+            } catch (error) {
+                console.error('Error loading project files:', error);
+            }
+        }
+
+        // Render tree nodes recursively
+        function renderTreeNodes(nodes, level, parentPath = '') {
+            let html = '';
+            
+            if (!nodes || Object.keys(nodes).length === 0) {
+                return '';
+            }
+            
+            Object.entries(nodes).sort(([a, nodeA], [b, nodeB]) => {
+                const aIsFolder = nodeA.type === 'folder' || nodeA.children !== undefined;
+                const bIsFolder = nodeB.type === 'folder' || nodeB.children !== undefined;
+                if (aIsFolder && !bIsFolder) return -1;
+                if (!aIsFolder && bIsFolder) return 1;
+                return a.localeCompare(b);
+            }).forEach(([name, node]) => {
+                const indent = level * 20;
+                const currentPath = parentPath ? `${parentPath}/${name}` : name;
+                
+                if (node.type === 'folder' || node.children !== undefined) {
+                    const hasChildren = node.children && Object.keys(node.children).length > 0;
+                    const isExpanded = expandedFolders.has(currentPath);
+                    const isSelected = currentFolder === currentPath ? 'selected' : '';
+                    
+                    html += `
+                        <div class="tree-item folder ${isSelected}" 
+                             data-path="${currentPath}"
+                             data-type="folder"
+                             style="padding-left: ${indent}px"
+                             onclick="selectFolder('${currentPath}', event)"
+                             ondblclick="handleDoubleClick(event, '${currentPath}', 'folder')"
+                             oncontextmenu="showContextMenu(event, '${currentPath}', 'folder')"
+                             draggable="true"
+                             ondragstart="handleDragStart(event, '${currentPath}', 'folder')"
+                             ondragend="handleDragEnd(event)"
+                             ondragover="handleDragOver(event)"
+                             ondragenter="handleDragEnter(event, '${currentPath}')"
+                             ondragleave="handleDragLeave(event)"
+                             ondrop="handleDrop(event, '${currentPath}', 'folder')">
+                            <span class="folder-arrow" onclick="toggleFolder('${currentPath}', event)">
+                                ${hasChildren ? (isExpanded ? '▼' : '▶') : ''}
+                            </span>
+                            <span class="icon">📁</span>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                    // Recursively render children only if expanded
+                    if (hasChildren && isExpanded) {
+                        html += renderTreeNodes(node.children, level + 1, currentPath);
+                    }
+                } else {
+                    const icon = getFileIcon(name);
+                    const filePath = node.path || currentPath;
+                    const isActive = filePath === currentFile ? 'selected' : '';
+                    html += `
+                        <div class="tree-item file ${isActive}" 
+                             data-path="${filePath}"
+                             data-type="file"
+                             style="padding-left: ${indent + 20}px" 
+                             onclick="handleFileClick(event, '${filePath}')"
+                             ondblclick="handleDoubleClick(event, '${filePath}', 'file')"
+                             oncontextmenu="showContextMenu(event, '${filePath}', 'file')"
+                             draggable="true"
+                             ondragstart="handleDragStart(event, '${filePath}', 'file')"
+                             ondragend="handleDragEnd(event)"
+                             ondragover="handleDragOver(event)"
+                             ondragenter="handleDragEnter(event, '${filePath}')"
+                             ondragleave="handleDragLeave(event)"
+                             ondrop="handleDrop(event, '${filePath}', 'file')">
+                            <span class="icon">${icon}</span>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                }
+            });
+            
+            return html;
+        }
+
+        // Handle double click for rename
+        function handleDoubleClick(event, path, type) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            clearTimeout(renameTimeout);
+            renameTimeout = setTimeout(() => {
+                enableInlineRename(event.currentTarget, path, type);
+            }, 300);
+        }
+
+        // Separate single click handler for files
+        function handleFileClick(event, filepath) {
+            clearTimeout(renameTimeout);
+            renameTimeout = setTimeout(() => {
+                openFile(filepath);
+            }, 250);
+        }
+
+        // Get file icon based on extension
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'js': '📄',
+                'json': '📋',
+                'html': '🌐',
+                'css': '🎨',
+                'md': '📝',
+                'txt': '📃',
+                'py': '🐍',
+                'ts': '📘',
+                'jsx': '⚛️',
+                'tsx': '⚛️',
+                'vue': '💚',
+                'go': '🐹',
+                'rs': '🦀',
+                'java': '☕',
+                'php': '🐘',
+                'rb': '💎',
+                'c': '🔷',
+                'cpp': '🔷',
+                'h': '🔷',
+                'cs': '🟦',
+                'swift': '🦉',
+                'kt': '🟪'
+            };
+            return icons[ext] || '📄';
+        }
+
+        // Get language mode for file
+        function getLanguageMode(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const languages = {
+                'js': 'javascript',
+                'json': 'json',
+                'html': 'html',
+                'css': 'css',
+                'md': 'markdown',
+                'py': 'python',
+                'ts': 'typescript',
+                'tsx': 'typescript',
+                'jsx': 'javascript',
+                'java': 'java',
+                'go': 'go',
+                'rs': 'rust',
+                'php': 'php',
+                'rb': 'ruby',
+                'c': 'c',
+                'cpp': 'cpp',
+                'h': 'c',
+                'cs': 'csharp',
+                'swift': 'swift',
+                'kt': 'kotlin',
+                'sql': 'sql',
+                'sh': 'shell',
+                'yml': 'yaml',
+                'yaml': 'yaml',
+                'xml': 'xml'
+            };
+            return languages[ext] || 'plaintext';
+        }
+
+        // Select folder
+        function selectFolder(folderPath, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            // If clicking the same folder, deselect it
+            if (currentFolder === folderPath) {
+                currentFolder = null;
+            } else {
+                currentFolder = folderPath;
+            }
+            
+            updateTreeControlsHint();
+            updateStatus(currentFolder ? `Selected folder: ${currentFolder}` : 'No folder selected');
+            
+            // Update visual selection
+            document.querySelectorAll('.tree-item.folder').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            if (currentFolder && event && event.currentTarget) {
+                event.currentTarget.classList.add('selected');
+            }
+        }
+
+        // Toggle folder
+        function toggleFolder(folderPath, event) {
+            event.stopPropagation();
+            
+            if (expandedFolders.has(folderPath)) {
+                expandedFolders.delete(folderPath);
+            } else {
+                expandedFolders.add(folderPath);
+            }
+            
+            loadProjectFiles();
+        }
+
+        // Update tree controls hint
+        function updateTreeControlsHint() {
+            const controls = document.getElementById('treeControls');
+            if (controls) {
+                if (currentFolder) {
+                    controls.setAttribute('data-hint', `📁 ${currentFolder}`);
+                } else {
+                    controls.setAttribute('data-hint', '📁 root');
+                }
+            }
+        }
+
+        // Update file tree to show selected file
+        function updateFileTree() {
+            document.querySelectorAll('.tree-item.file').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // This is a bit hacky but works for now
+            // In a real implementation, we'd store references to DOM elements
+            loadProjectFiles();
+        }
+
+       // Show/hide modals
+       function showNewProjectModal() {
+           document.getElementById('newProjectModal').style.display = 'block';
+           document.getElementById('newProjectName').focus();
+       }
+
+       function showNewFileModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           
+           const modal = document.getElementById('newFileModal');
+           const input = document.getElementById('newFilePath');
+           
+           // Just show filename input, not the full path
+           input.value = '';
+           if (currentFolder) {
+               input.placeholder = 'Enter filename (e.g., component.js)';
+           } else {
+               input.placeholder = 'Enter filename or path (e.g., index.js or src/index.js)';
+           }
+           
+           modal.style.display = 'block';
+           input.focus();
+       }
+
+       function showNewFolderModal() {
+           if (!currentProject) {
+               alert('Please select a project first');
+               return;
+           }
+           
+           const modal = document.getElementById('newFolderModal');
+           const input = document.getElementById('newFolderPath');
+           
+           // Similar to file creation - just show folder name
+           input.value = '';
+           if (currentFolder) {
+               input.placeholder = 'Enter folder name (e.g., components)';
+           } else {
+               input.placeholder = 'Enter folder name or path (e.g., src or src/components)';
+           }
+           
+           modal.style.display = 'block';
+           input.focus();
+       }
+
+       function closeModal(modalId) {
+           document.getElementById(modalId).style.display = 'none';
+       }
+
+       // Create project
+       async function createProject() {
+           const name = document.getElementById('newProjectName').value.trim();
+           const description = document.getElementById('newProjectDescription').value.trim();
+           
+           if (!name) {
+               alert('Project name is required');
+               return;
+           }
+           
+           try {
+               const response = await fetch(`${API_URL}/projects`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ name, description })
+               });
+               
+               if (response.ok) {
+                   const data = await response.json();
+                   closeModal('newProjectModal');
+                   await loadProjects();
+                   document.getElementById('projectSelector').value = data.project.id;
+                   loadProject(data.project.id);
+                   updateStatus(`Created project: ${name}`);
+               }
+           } catch (error) {
+               console.error('Error creating project:', error);
+               updateStatus('Error creating project', true);
+           }
+       }
+
+       // Create file
+       async function createFile() {
+           let filepath = document.getElementById('newFilePath').value.trim();
+           
+           if (!filepath) {
+               alert('File name is required');
+               return;
+           }
+           
+           // If we have a current folder selected and the filepath doesn't contain /, prepend the folder
+           if (currentFolder && !filepath.includes('/')) {
+               filepath = currentFolder + '/' + filepath;
+           }
+           
+           try {
+               const language = getLanguageMode(filepath);
+               const templates = {
+                   'javascript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                   'typescript': `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`,
+                   'html': `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Document</title>\n</head>\n<body>\n    \n</body>\n</html>`,
+                   'css': `/* ${filepath} */\n/* Created on ${new Date().toLocaleString()} */\n\n`,
+                   'python': `# ${filepath}\n# Created on ${new Date().toLocaleString()}\n\n`,
+                   'json': '{\n  \n}',
+                   'markdown': `# ${filepath.split('/').pop().replace('.md', '')}\n\nCreated on ${new Date().toLocaleString()}\n\n`
+               };
+               
+               const content = templates[language] || `// ${filepath}\n// Created on ${new Date().toLocaleString()}\n\n`;
+               
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ filepath, content })
+               });
+               
+               if (response.ok) {
+                   closeModal('newFileModal');
+                   await loadProjectFiles();
+                   openFile(filepath);
+                   updateStatus(`Created file: ${filepath}`);
+               }
+           } catch (error) {
+               console.error('Error creating file:', error);
+               updateStatus('Error creating file', true);
+           }
+       }
+
+       // Create folder
+       async function createFolder() {
+           let folderPath = document.getElementById('newFolderPath').value.trim();
+           
+           if (!folderPath) {
+               alert('Folder name is required');
+               return;
+           }
+           
+           // If we have a current folder selected and the path doesn't contain /, prepend the folder
+           if (currentFolder && !folderPath.includes('/')) {
+               folderPath = currentFolder + '/' + folderPath;
+           }
+           
+           console.log('Creating folder:', folderPath); // Debug log
+           
+           try {
+               const response = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ folderPath })
+               });
+               
+               const data = await response.json();
+               
+               if (response.ok) {
+                   closeModal('newFolderModal');
+                   
+                   // Add the new folder to expanded folders so it shows open
+                   expandedFolders.add(folderPath);
+                   
+                   await loadProjectFiles();
+                   updateStatus(`Created folder: ${folderPath}`);
+               } else {
+                   alert(`Error: ${data.error}`);
+               }
+           } catch (error) {
+               console.error('Error creating folder:', error);
+               updateStatus('Error creating folder', true);
+               alert(`Error creating folder: ${error.message}`);
+           }
+       }
+
+       // Update status message
+       function updateStatus(message, isError = false) {
+           const statusMessage = document.getElementById('statusMessage');
+           statusMessage.textContent = message;
+           statusMessage.style.color = isError ? '#f48771' : '#ffffff';
+           
+           if (!isError) {
+               setTimeout(() => {
+                   statusMessage.textContent = 'Ready';
+               }, 3000);
+           }
+       }
+
+       // Drag and Drop Functions
+       function handleDragStart(e, path, type) {
+           draggedItem = e.target;
+           draggedItemPath = path;
+           draggedItemType = type;
+           e.target.style.opacity = '0.5';
+           e.dataTransfer.effectAllowed = 'move';
+       }
+
+       function handleDragEnd(e) {
+           e.target.style.opacity = '';
+           // Remove all drag-over classes
+           document.querySelectorAll('.drag-over').forEach(el => {
+               el.classList.remove('drag-over');
+           });
+       }
+
+       function handleDragOver(e) {
+           if (e.preventDefault) {
+               e.preventDefault();
+           }
+           e.dataTransfer.dropEffect = 'move';
+           return false;
+       }
+
+       function handleDragEnter(e, targetPath) {
+           if (draggedItemPath === targetPath) return;
+           e.currentTarget.classList.add('drag-over');
+       }
+
+       function handleDragLeave(e) {
+           e.currentTarget.classList.remove('drag-over');
+       }
+
+       async function handleDrop(e, targetPath, targetType) {
+           if (e.stopPropagation) {
+               e.stopPropagation();
+           }
+           e.preventDefault();
+           
+           e.currentTarget.classList.remove('drag-over');
+           
+           // Don't drop on itself
+           if (draggedItemPath === targetPath) return;
+           
+           // Don't drop a folder into its own child
+           if (targetPath && draggedItemPath && targetPath.startsWith(draggedItemPath + '/')) {
+               updateStatus('Cannot move a folder into itself', true);
+               return;
+           }
+           
+           // Determine the new path
+           let newPath;
+           if (targetType === 'root' || targetPath === '') {
+               // Dropping in root
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = itemName;
+           } else if (targetType === 'folder') {
+               // Dropping into a folder
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = targetPath + '/' + itemName;
+           } else {
+               // Dropping next to a file (same directory)
+               const targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+               const itemName = draggedItemPath.split('/').pop();
+               newPath = targetDir ? targetDir + '/' + itemName : itemName;
+           }
+           
+           // Don't move if it's the same location
+           if (draggedItemPath === newPath) return;
+           
+           // Move the item
+           try {
+               await moveItem(draggedItemPath, newPath, draggedItemType);
+               updateStatus(`Moved ${draggedItemPath} to ${newPath || 'root'}`);
+               await loadProjectFiles();
+           } catch (error) {
+               console.error('Error moving item:', error);
+               updateStatus('Error moving item', true);
+           }
+           
+           return false;
+       }
+
+       // Replace the moveItem function in project.html
+        async function moveItem(oldPath, newPath, type) {
+            console.log(`Moving ${type}: ${oldPath} -> ${newPath}`);
+            
+            if (type === 'file') {
+                // Get file content
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(oldPath)}`);
+                const data = await response.json();
+                
+                // Create at new location
+                await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filepath: newPath, content: data.content })
+                });
+                
+                // Delete from old location
+                await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(oldPath)}`, {
+                    method: 'DELETE'
+                });
+                
+                // Update open files if needed
+                if (openFiles.has(oldPath)) {
+                    const content = openFiles.get(oldPath);
+                    openFiles.delete(oldPath);
+                    openFiles.set(newPath, content);
+                    if (currentFile === oldPath) {
+                        currentFile = newPath;
+                    }
+                }
+            } else {
+                // For folders, we need to:
+                // 1. Move all files
+                // 2. Delete the empty folder
+                
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                const data = await response.json();
+                
+                // Find all files in this folder
+                const filesToMove = data.files.filter(file => 
+                    file.filepath.startsWith(oldPath + '/')
+                );
+                
+                console.log(`Moving ${filesToMove.length} files from folder`);
+                
+                // Move each file
+                for (const file of filesToMove) {
+                    const relativePath = file.filepath.substring(oldPath.length);
+                    const newFilePath = newPath + relativePath;
+                    
+                    const fileResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(file.filepath)}`);
+                    const fileData = await fileResponse.json();
+                    
+                    await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filepath: newFilePath, content: fileData.content })
+                    });
+                    
+                    await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(file.filepath)}`, {
+                        method: 'DELETE'
+                    });
+                }
+                
+                // Now delete the empty source folder
+                console.log(`Deleting empty folder: ${oldPath}`);
+                await fetch(`${API_URL}/projects/${currentProject.id}/folders/${encodeURIComponent(oldPath)}`, {
+                    method: 'DELETE'
+                });
+            }
+        }
+
+        // Update showContextMenu to store the element
+        function showContextMenu(event, path, type) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            contextMenuTarget = path;
+            contextMenuType = type;
+            
+            // Store the element that was right-clicked
+            window.lastContextElement = event.currentTarget;
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            
+            const x = event.pageX;
+            const y = event.pageY;
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            console.log('Context menu shown for:', path, type); // Debug
+        }
+
+        // Add this simple inline rename function
+        function startInlineRename() {
+            if (!contextMenuTarget || !window.lastContextElement) {
+                console.log('No target for rename');
                 return;
             }
             
+            const element = window.lastContextElement;
+            const nameSpan = element.querySelector('span:last-child');
+            const originalName = contextMenuTarget.split('/').pop();
+            
+            console.log('Starting rename for:', originalName);
+            
+            // Create input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = originalName;
+            input.style.cssText = 'background: #3c3c3c; border: 1px solid #007acc; color: #fff; padding: 2px;';
+            
+            // Replace text with input
+            nameSpan.textContent = '';
+            nameSpan.appendChild(input);
+            input.focus();
+            input.select();
+            
+            // Save on Enter
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const newName = input.value.trim();
+                    if (newName && newName !== originalName) {
+                        await performRename(contextMenuTarget, newName, contextMenuType);
+                    }
+                    nameSpan.textContent = originalName;
+                } else if (e.key === 'Escape') {
+                    nameSpan.textContent = originalName;
+                }
+            });
+            
+            // Save on blur
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    nameSpan.textContent = originalName;
+                }, 200);
+            });
+        }
+
+        // Update performRename in project.html
+        async function performRename(oldPath, newName, type) {
+            const basePath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+            const newPath = basePath ? basePath + '/' + newName : newName;
+            
+            console.log('Renaming:', oldPath, 'to', newPath, 'Type:', type);
+            
             try {
-                const response = await fetch(`${API_URL}/files/${filename}`);
-                const data = await response.json();
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/rename`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        oldPath: oldPath, 
+                        newPath: newPath, 
+                        isFolder: type === 'folder' 
+                    })
+                });
                 
-                if (response.ok) {
-                    document.getElementById('editor').value = data.content;
-                    showStatus(`✅ Loaded ${filename} (${data.size} bytes)`);
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    updateStatus(`Renamed to ${newName}`);
+                    
+                    // Update open files if it was a file
+                    if (type === 'file' && openFiles.has(oldPath)) {
+                        const content = openFiles.get(oldPath);
+                        openFiles.delete(oldPath);
+                        openFiles.set(newPath, content);
+                        if (currentFile === oldPath) {
+                            currentFile = newPath;
+                            updateTabs();
+                        }
+                    }
+                    
+                    // Update folder references if it was a folder
+                    if (type === 'folder') {
+                        // Update expanded folders
+                        if (expandedFolders.has(oldPath)) {
+                            expandedFolders.delete(oldPath);
+                            expandedFolders.add(newPath);
+                        }
+                        
+                        // Update current folder if needed
+                        if (currentFolder === oldPath) {
+                            currentFolder = newPath;
+                            updateTreeControlsHint();
+                        }
+                        
+                        // Update any open files that were in this folder
+                        const filesToUpdate = [];
+                        openFiles.forEach((content, filepath) => {
+                            if (filepath.startsWith(oldPath + '/')) {
+                                filesToUpdate.push({ oldPath: filepath, newPath: filepath.replace(oldPath, newPath), content });
+                            }
+                        });
+                        
+                        filesToUpdate.forEach(({ oldPath, newPath, content }) => {
+                            openFiles.delete(oldPath);
+                            openFiles.set(newPath, content);
+                            if (currentFile === oldPath) {
+                                currentFile = newPath;
+                            }
+                        });
+                        
+                        if (filesToUpdate.length > 0) {
+                            updateTabs();
+                        }
+                    }
+                    
+                    await loadProjectFiles();
                 } else {
-                    showStatus(`❌ Error: ${data.error}`, true);
+                    console.error('Rename failed:', result);
+                    updateStatus('Rename failed: ' + (result.error || 'Unknown error'), true);
                 }
             } catch (error) {
-                showStatus(`❌ Error: ${error.message}`, true);
+                console.error('Error renaming:', error);
+                updateStatus('Error renaming: ' + error.message, true);
+            }
+        }
+
+        // Rename item
+        async function renameItem() {
+            if (!contextMenuTarget) return;
+            
+            const oldName = contextMenuTarget.split('/').pop();
+            const newName = prompt(`Rename ${contextMenuType}:`, oldName);
+            
+            if (!newName || newName === oldName) return;
+            
+            const basePath = contextMenuTarget.substring(0, contextMenuTarget.lastIndexOf('/'));
+            const newPath = basePath ? basePath + '/' + newName : newName;
+            
+            try {
+                await moveItem(contextMenuTarget, newPath, contextMenuType);
+                updateStatus(`Renamed ${oldName} to ${newName}`);
+                await loadProjectFiles();
+            } catch (error) {
+                console.error('Error renaming:', error);
+                updateStatus('Error renaming item', true);
+            }
+        }
+
+        // Update deleteItem with better undo support
+        async function deleteItem() {
+            if (!contextMenuTarget) return;
+            
+            const name = contextMenuTarget.split('/').pop();
+            
+            try {
+                if (contextMenuType === 'file') {
+                    // Store file content before deleting
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to get file for backup');
+                    }
+                    
+                    const fileData = await response.json();
+                    const savedContent = fileData.content;
+                    const savedPath = contextMenuTarget;
+                    
+                    // Delete the file
+                    const deleteResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(contextMenuTarget)}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!deleteResponse.ok) {
+                        throw new Error('Failed to delete file');
+                    }
+                    
+                    if (openFiles.has(contextMenuTarget)) {
+                        closeFile(contextMenuTarget);
+                    }
+                    
+                    // Show undo notification with restore function
+                    showUndoNotification(name, 'file', async () => {
+                        // Restore the file
+                        const restoreResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                filepath: savedPath, 
+                                content: savedContent 
+                            })
+                        });
+                        
+                        if (!restoreResponse.ok) {
+                            throw new Error('Failed to restore file');
+                        }
+                        
+                        await loadProjectFiles();
+                        updateStatus(`Restored file: ${name}`);
+                    });
+                    
+                    updateStatus(`Deleted file: ${name}`);
+                    
+                } else {
+                    // For folders, store the folder structure before deleting
+                    const filesResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files`);
+                    const filesData = await filesResponse.json();
+                    
+                    // Find all files in the folder
+                    const folderFiles = filesData.files.filter(file => 
+                        file.filepath === contextMenuTarget || 
+                        file.filepath.startsWith(contextMenuTarget + '/')
+                    );
+                    
+                    // Store file contents before deletion
+                    const savedFiles = [];
+                    for (const file of folderFiles) {
+                        const fileResponse = await fetch(`${API_URL}/projects/${currentProject.id}/files/${encodeURIComponent(file.filepath)}`);
+                        if (fileResponse.ok) {
+                            const fileData = await fileResponse.json();
+                            savedFiles.push({
+                                filepath: file.filepath,
+                                content: fileData.content
+                            });
+                        }
+                    }
+                    
+                    // Delete the folder
+                    const deleteResponse = await fetch(
+                        `${API_URL}/projects/${currentProject.id}/folders/${encodeURIComponent(contextMenuTarget)}`, 
+                        {
+                            method: 'DELETE'
+                        }
+                    );
+                    
+                    if (!deleteResponse.ok) {
+                        throw new Error('Failed to delete folder');
+                    }
+                    
+                    // Update UI
+                    if (currentFolder === contextMenuTarget) {
+                        currentFolder = null;
+                        updateTreeControlsHint();
+                    }
+                    expandedFolders.delete(contextMenuTarget);
+                    
+                    // Close any open files from this folder
+                    savedFiles.forEach(file => {
+                        if (openFiles.has(file.filepath)) {
+                            closeFile(file.filepath);
+                        }
+                    });
+                    
+                    // Show undo notification with restore function
+                    const folderPath = contextMenuTarget;
+                    showUndoNotification(name, 'folder', async () => {
+                        // First recreate the folder
+                        const folderResponse = await fetch(`${API_URL}/projects/${currentProject.id}/folders`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folderPath })
+                        });
+                        
+                        if (!folderResponse.ok) {
+                            throw new Error('Failed to restore folder');
+                        }
+                        
+                        // Then restore all files
+                        for (const file of savedFiles) {
+                            await fetch(`${API_URL}/projects/${currentProject.id}/files`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    filepath: file.filepath, 
+                                    content: file.content 
+                                })
+                            });
+                        }
+                        
+                        await loadProjectFiles();
+                        updateStatus(`Restored folder: ${name} (${savedFiles.length} files)`);
+                    });
+                    
+                    updateStatus(`Deleted folder: ${name}`);
+                }
+                
+                await loadProjectFiles();
+                
+            } catch (error) {
+                console.error('Error deleting:', error);
+                updateStatus(`Error deleting: ${error.message}`, true);
+            }
+        }
+
+       // New file in specific folder
+       function newFileInFolder() {
+           if (contextMenuType === 'folder') {
+               currentFolder = contextMenuTarget;
+               updateTreeControlsHint();
+               showNewFileModal();
+           }
+       }
+
+       // New folder in specific folder  
+       function newFolderInFolder() {
+           if (contextMenuType === 'folder') {
+               currentFolder = contextMenuTarget;
+               updateTreeControlsHint();
+               showNewFolderModal();
+           }
+       }
+
+        // Generate random user info
+        function generateUser() {
+            const names = ['Alex', 'Sam', 'Jordan', 'Casey', 'Riley', 'Morgan', 'Taylor', 'Drew'];
+            const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#00bcd4', '#009688', '#4caf50'];
+            
+            return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: names[Math.floor(Math.random() * names.length)],
+                color: colors[Math.floor(Math.random() * colors.length)]
+            };
+        }
+        
+        // Initialize collaboration
+        function initializeCollaboration() {
+            // Get or create user
+            const stored = localStorage.getItem('collabUser');
+            currentUser = stored ? JSON.parse(stored) : generateUser();
+            localStorage.setItem('collabUser', JSON.stringify(currentUser));
+            
+            // Get session from URL or create new
+            const urlParams = new URLSearchParams(window.location.search);
+            sessionId = urlParams.get('session') || generateSessionId();
+            
+            // Update URL with session
+            if (!urlParams.has('session')) {
+                window.history.replaceState({}, '', `?session=${sessionId}`);
+            }
+            
+            // Connect to WebSocket
+            connectWebSocket();
+        }
+        
+        function generateSessionId() {
+            return 'collab-' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function connectWebSocket() {
+            console.log('🔌 Attempting to connect to WebSocket...');
+            console.log('Session ID:', sessionId);
+            console.log('User:', currentUser);
+            
+            // Try connecting with explicit URL
+            socket = io('http://localhost:3000', {
+                query: {
+                    sessionId: sessionId,
+                    userId: currentUser.id,
+                    userName: currentUser.name,
+                    userColor: currentUser.color
+                },
+                transports: ['websocket', 'polling'], // Force transport methods
+                reconnection: true
+            });
+            
+            socket.on('connect', () => {
+                console.log('✅ Connected to collaboration server');
+                console.log('Socket ID:', socket.id);
+                isConnected = true;
+                updateStatus('Connected to collaboration server');
+                
+                if (currentProject) {
+                    console.log('Joining project:', currentProject.id);
+                    socket.emit('join-project', {
+                        projectId: currentProject.id,
+                        user: currentUser
+                    });
+                }
+            });
+            
+            socket.on('connect_error', (error) => {
+                console.error('❌ Connection error:', error.message);
+                console.error('Error type:', error.type);
+            });
+            
+            socket.on('disconnect', (reason) => {
+                console.log('❌ Disconnected:', reason);
+                isConnected = false;
+                updateStatus('Disconnected from collaboration server', true);
+            });
+            
+            // Handle user events
+            socket.on('user-joined', (data) => {
+                console.log('User joined:', data.user.name);
+                collaborators.set(data.user.id, data.user);
+                updateCollaboratorsList();
+                showNotification(`${data.user.name} joined the project`);
+            });
+            
+            socket.on('user-left', (data) => {
+                console.log('User left:', data.userId);
+                const user = collaborators.get(data.userId);
+                if (user) {
+                    collaborators.delete(data.userId);
+                    updateCollaboratorsList();
+                    showNotification(`${user.name} left the project`);
+                    removeUserDecorations(data.userId);
+                }
+            });
+            
+            socket.on('active-users', (data) => {
+                collaborators.clear();
+                data.users.forEach(user => {
+                    if (user.id !== currentUser.id) {
+                        collaborators.set(user.id, user);
+                    }
+                });
+                updateCollaboratorsList();
+            });
+            
+            // Handle code changes
+            socket.on('code-change', (data) => {
+                if (data.userId === currentUser.id) return;
+    
+                if (editor && currentFile === data.file) {
+                    const model = editor.getModel();
+                    if (model) {
+                        isApplyingRemoteChange = true;
+                        
+                        // Apply the change with error handling
+                        try {
+                            model.pushEditOperations([], [{
+                                range: new monaco.Range(
+                                    data.change.range.startLineNumber,
+                                    data.change.range.startColumn,
+                                    data.change.range.endLineNumber,
+                                    data.change.range.endColumn
+                                ),
+                                text: data.change.text
+                            }], () => null);
+                        } catch (error) {
+                            console.error('Error applying remote change:', error);
+                        }
+                        
+                        isApplyingRemoteChange = false;
+                    }
+                }
+                
+                // Update file content in memory
+                if (openFiles.has(data.file)) {
+                    const fileData = openFiles.get(data.file);
+                    fileData.content = data.content;
+                    openFiles.set(data.file, fileData);
+                }
+            });
+            
+            // Handle cursor/selection changes
+            socket.on('cursor-change', (data) => {
+                if (data.userId === currentUser.id) return;
+                
+                if (editor && currentFile === data.file) {
+                    updateRemoteCursor(data.userId, data.position, data.selection);
+                }
+            });
+            
+            // Handle file operations
+            socket.on('file-created', async (data) => {
+                if (data.userId === currentUser.id) return;
+                await loadProjectFiles();
+                showNotification(`${data.userName} created ${data.filepath}`);
+            });
+            
+            socket.on('file-deleted', async (data) => {
+                if (data.userId === currentUser.id) return;
+                await loadProjectFiles();
+                showNotification(`${data.userName} deleted ${data.filepath}`);
+            });
+            
+            socket.on('file-renamed', async (data) => {
+                if (data.userId === currentUser.id) return;
+                await loadProjectFiles();
+                showNotification(`${data.userName} renamed ${data.oldPath} to ${data.newPath}`);
+            });
+        }
+        
+        // Update collaborators display
+        function updateCollaboratorsList() {
+            const activeUsers = document.getElementById('activeUsers');
+            const userList = document.getElementById('userList');
+            
+            // Update avatar bar
+            activeUsers.innerHTML = '';
+            collaborators.forEach(user => {
+                const avatar = document.createElement('div');
+                avatar.className = 'user-avatar';
+                avatar.style.backgroundColor = user.color;
+                avatar.textContent = user.name.charAt(0).toUpperCase();
+                avatar.innerHTML += `<div class="user-tooltip">${user.name}</div>`;
+                activeUsers.appendChild(avatar);
+            });
+            
+            // Update user list panel
+            userList.innerHTML = '';
+            collaborators.forEach(user => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="user-status"></div>
+                    <span>${user.name}</span>
+                `;
+                userList.appendChild(li);
+            });
+            
+            // Show/hide collab button
+            if (collaborators.size > 0) {
+                const collabButton = document.createElement('div');
+                collabButton.className = 'user-avatar';
+                collabButton.style.backgroundColor = '#666';
+                collabButton.textContent = '+' + collaborators.size;
+                collabButton.onclick = toggleCollabPanel;
+                collabButton.innerHTML += `<div class="user-tooltip">Show collaborators</div>`;
+                activeUsers.appendChild(collabButton);
             }
         }
         
-        async function listFiles() {
-            try {
-                const response = await fetch(`${API_URL}/files`);
-                const data = await response.json();
-                
-                const fileList = document.getElementById('fileList');
-                
-                if (data.files.length === 0) {
-                    fileList.innerHTML = '<p style="color: #666;">No files found in Redis</p>';
-                } else {
-                    fileList.innerHTML = data.files.map(file => `
-                        <div class="file-item" onclick="loadFileByName('${file.filename}')">
-                            <span>📄 ${file.filename}</span>
-                            <small>${file.updatedAt ? new Date(file.updatedAt).toLocaleString() : 'Unknown'}</small>
-                        </div>
-                    `).join('');
-                }
-            } catch (error) {
-                showStatus(`❌ Error listing files: ${error.message}`, true);
+        function toggleCollabPanel() {
+            const panel = document.getElementById('collabPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // Update remote cursor/selection decorations
+        function updateRemoteCursor(userId, position, selection) {
+            const user = collaborators.get(userId);
+            if (!user || !editor) return;
+            
+            // Remove old decorations
+            removeUserDecorations(userId);
+            
+            const decorations = [];
+            
+            // Add cursor decoration
+            if (position) {
+                decorations.push({
+                    range: new monaco.Range(
+                        position.lineNumber,
+                        position.column,
+                        position.lineNumber,
+                        position.column
+                    ),
+                    options: {
+                        className: `remote-cursor-${userId}`,
+                        hoverMessage: { value: user.name },
+                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                    }
+                });
+            }
+            
+            // Add selection decoration
+            if (selection && !selection.isEmpty()) {
+                decorations.push({
+                    range: new monaco.Range(
+                        selection.startLineNumber,
+                        selection.startColumn,
+                        selection.endLineNumber,
+                        selection.endColumn
+                    ),
+                    options: {
+                        className: `remote-selection-${userId}`,
+                        hoverMessage: { value: user.name },
+                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                    }
+                });
+            }
+            
+            // Apply decorations
+            const newDecorations = editor.deltaDecorations([], decorations);
+            remoteDecorations.set(userId, newDecorations);
+            
+            // Add dynamic styles for this user
+            addUserStyles(userId, user.color);
+        }
+        
+        function removeUserDecorations(userId) {
+            const decorations = remoteDecorations.get(userId);
+            if (decorations && editor) {
+                editor.deltaDecorations(decorations, []);
+                remoteDecorations.delete(userId);
             }
         }
         
-        function loadFileByName(filename) {
-            document.getElementById('filename').value = filename;
-            loadFile();
+        function addUserStyles(userId, color) {
+            const styleId = `collab-styles-${userId}`;
+            let style = document.getElementById(styleId);
+            
+            if (!style) {
+                style = document.createElement('style');
+                style.id = styleId;
+                document.head.appendChild(style);
+            }
+            
+            style.textContent = `
+                .remote-cursor-${userId} {
+                    background-color: ${color} !important;
+                }
+                .remote-cursor-${userId}::before {
+                    background-color: ${color} !important;
+                }
+                .remote-selection-${userId} {
+                    background-color: ${color} !important;
+                }
+            `;
         }
         
-        // Load file list on page load
-        window.onload = () => {
-            listFiles();
+        // Share functionality
+        function showShareDialog() {
+            const dialog = document.getElementById('shareDialog');
+            const linkInput = document.getElementById('shareLink');
+            linkInput.value = window.location.href;
+            dialog.style.display = 'block';
+        }
+        
+        function closeShareDialog() {
+            document.getElementById('shareDialog').style.display = 'none';
+        }
+        
+        function copyShareLink() {
+            const linkInput = document.getElementById('shareLink');
+            linkInput.select();
+            document.execCommand('copy');
+            
+            const button = event.target;
+            button.textContent = 'Copied!';
+            button.classList.add('copied');
+            
+            setTimeout(() => {
+                button.textContent = 'Copy';
+                button.classList.remove('copied');
+            }, 2000);
+        }
+        
+        function showNotification(message) {
+            // You can implement a toast notification here
+            console.log('Notification:', message);
+        }
+        
+        function initializeEditor() {
+            // ... existing Monaco setup ...
+            document.getElementById('loading').style.display = 'none';
+            
+            // Define custom theme
+            monaco.editor.defineTheme('redis-dark', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '608B4E' },
+                    { token: 'keyword', foreground: '569CD6' },
+                    { token: 'string', foreground: 'CE9178' }
+                ],
+                colors: {
+                    'editor.background': '#1E1E1E',
+                    'editor.foreground': '#D4D4D4',
+                    'editor.lineHighlightBackground': '#2D2D30',
+                    'editorCursor.foreground': '#AEAFAD',
+                    'editor.selectionBackground': '#264F78'
+                }
+            });
+            
+            // Create editor
+            editor = monaco.editor.create(document.getElementById('monaco-container'), {
+                value: '// Welcome to Redis IDE with Monaco Editor\n// Select or create a project to start coding!',
+                language: 'javascript',
+                theme: 'redis-dark',
+                automaticLayout: true,
+                fontSize: 14,
+                minimap: {
+                    enabled: true
+                },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                formatOnPaste: true,
+                formatOnType: true,
+                suggestOnTriggerCharacters: true,
+                quickSuggestions: {
+                    other: true,
+                    comments: true,
+                    strings: true
+                },
+                parameterHints: {
+                    enabled: true
+                },
+                tabSize: 2,
+                insertSpaces: true
+            });
+
+            // Handle editor changes
+            editor.onDidChangeModelContent(() => {
+                if (currentFile && openFiles.has(currentFile)) {
+                    const fileData = openFiles.get(currentFile);
+                    fileData.content = editor.getValue();
+                    fileData.dirty = true;
+                    openFiles.set(currentFile, fileData);
+                    updateTabs();
+                    updateStatus('Modified');
+                    
+                    // Auto-save after 1 second of inactivity
+                    clearTimeout(window.saveTimeout);
+                    window.saveTimeout = setTimeout(() => {
+                        saveCurrentFile();
+                    }, 1000);
+                }
+            });
+
+            // Update cursor position
+            editor.onDidChangeCursorPosition((e) => {
+                const position = e.position;
+                document.getElementById('cursorPosition').textContent = 
+                    `Ln ${position.lineNumber}, Col ${position.column}`;
+            });
+
+            // Set up keyboard shortcuts
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                saveCurrentFile();
+            });
+
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
+                if (currentFile) {
+                    closeFile(currentFile);
+                }
+            });
+
+            // Format document shortcut
+            editor.addCommand(monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
+                editor.getAction('editor.action.formatDocument').run();
+            });
+            // Add collaboration handlers
+            editor.onDidChangeModelContent((e) => {
+                if (isApplyingRemoteChange) return; // Don't broadcast remote changes
+                
+                console.log('Content changed locally'); // Debug
+                
+                if (currentFile && socket && isConnected && currentProject) {
+                    const content = editor.getValue();
+                    
+                    // Send each change
+                    e.changes.forEach(change => {
+                        console.log('Sending change:', change); // Debug
+                        
+                        socket.emit('code-change', {
+                            projectId: currentProject.id,
+                            file: currentFile,
+                            change: {
+                                range: change.range,
+                                text: change.text
+                            },
+                            content: content,
+                            userId: currentUser.id // Add this
+                        });
+                    });
+                }
+            });
+            
+            // Track cursor position
+            editor.onDidChangeCursorPosition((e) => {
+                if (socket && isConnected && currentFile) {
+                    socket.emit('cursor-change', {
+                        projectId: currentProject?.id,
+                        file: currentFile,
+                        position: e.position,
+                        selection: editor.getSelection()
+                    });
+                }
+            });
+        }
+        
+        // Override file operations to emit events
+        const originalCreateFile = createFile;
+        createFile = async function() {
+            await originalCreateFile();
+            if (socket && isConnected) {
+                socket.emit('file-created', {
+                    projectId: currentProject?.id,
+                    filepath: document.getElementById('newFilePath').value
+                });
+            }
         };
+        
+        const originalDeleteItem = deleteItem;
+        deleteItem = async function() {
+            const deletedPath = contextMenuTarget;
+            await originalDeleteItem();
+            if (socket && isConnected) {
+                socket.emit('file-deleted', {
+                    projectId: currentProject?.id,
+                    filepath: deletedPath
+                });
+            }
+        };
+        
+        // Initialize AI features
+        function initializeAI() {
+            // Remove API key check for speed
+            console.log('AI Assistant ready (Demo mode - no API key needed)');
+            // Remove any API key prompts
+            window.aiApiKey = 'demo-mode';
+            
+            // Add keyboard shortcut
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+                    e.preventDefault();
+                    toggleAIPanel();
+                }
+            });
+        }
+        
+        function toggleAIPanel() {
+            const panel = document.getElementById('aiAssistantPanel');
+            const toggleBtn = document.querySelector('.ai-toggle-btn');
+            const mainContent = document.querySelector('.main-content');
+            
+            panel.classList.toggle('active');
+            toggleBtn.classList.toggle('active');
+            mainContent.classList.toggle('ai-panel-open');
+            
+            // Resize Monaco editor
+            if (editor) {
+                setTimeout(() => editor.layout(), 300);
+            }
+        }
+        
+        function switchAITab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('.ai-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.ai-tab').forEach(tabEl => {
+                tabEl.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`ai${tab.charAt(0).toUpperCase() + tab.slice(1)}Tab`).style.display = 'block';
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+        
+        async function sendAIMessage() {
+            const input = document.getElementById('aiInput');
+            const message = input.value.trim();
+            
+            if (!message || isAIProcessing) return;
+            
+            // Add user message
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            // Get context - including the current code
+            const context = {
+                currentFile: currentFile,
+                selection: null,
+                fullCode: null
+            };
+            
+            if (editor) {
+                const selection = editor.getSelection();
+                if (!selection.isEmpty()) {
+                    context.selection = editor.getModel().getValueInRange(selection);
+                }
+                // Always include the full code
+                context.fullCode = editor.getValue();
+            }
+            
+            // Show loading
+            showAILoading();
+            isAIProcessing = true;
+            document.getElementById('aiSendBtn').disabled = true;
+            
+            try {
+                const response = await callOpenAI(message, context);
+                addChatMessage(response, 'assistant');
+            } catch (error) {
+                console.error('AI Error:', error);
+                addChatMessage('Sorry, I encountered an error. Please make sure your API key is set.', 'assistant');
+            } finally {
+                hideAILoading();
+                isAIProcessing = false;
+                document.getElementById('aiSendBtn').disabled = false;
+            }
+        }
+        
+        function getCodeContext() {
+            let context = {
+                currentFile: currentFile,
+                selection: null,
+                fullCode: null
+            };
+            
+            if (editor) {
+                const selection = editor.getSelection();
+                if (!selection.isEmpty()) {
+                    context.selection = editor.getModel().getValueInRange(selection);
+                }
+                context.fullCode = editor.getValue();
+            }
+            
+            return context;
+        }
+        
+        // Replace the AI function with this working version to integrate Groq
+        async function callOpenAI(message, context) {
+            try {
+                const GROQ_API_KEY = groqApiKey;
+                
+                // Build a comprehensive prompt
+                let prompt = message;
+                
+                // If asking about code access, include the code
+                if (message.toLowerCase().includes('access') && message.toLowerCase().includes('code')) {
+                    if (context.fullCode) {
+                        prompt = `Yes, I can see your code. Here it is:\n\`\`\`javascript\n${context.fullCode}\n\`\`\`\n\nNow, ${message}`;
+                    } else {
+                        prompt = "I don't see any code open in the editor. Please open a file first.";
+                    }
+                } else if (context.selection) {
+                    prompt = `${message}\n\nSelected code:\n\`\`\`javascript\n${context.selection}\n\`\`\``;
+                } else if (context.fullCode && (message.toLowerCase().includes('code') || message.toLowerCase().includes('explain') || message.toLowerCase().includes('analyze'))) {
+                    prompt = `${message}\n\nCurrent file (${context.currentFile || 'untitled'}):\n\`\`\`javascript\n${context.fullCode}\n\`\`\``;
+                }
+                
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${GROQ_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'llama3-70b-8192',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are an expert coding assistant integrated into an IDE. You can see and analyze the code that users share with you. Always provide helpful, specific feedback about their code.'
+                            },
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+                
+                const data = await response.json();
+                return data.choices[0].message.content;
+                
+            } catch (error) {
+                console.error('AI Error:', error);
+                return "I'm having trouble connecting to the AI service. Please check your API key and try again.";
+            }
+        }
+
+
+        // Mock AI for quick demo (no API needed)
+        function mockAIResponse(message, context) {
+            const responses = {
+                'explain': 'This code defines a function that fetches user data from an API endpoint. It uses async/await for handling asynchronous operations.',
+                'bugs': 'Potential issues found:\n• No error handling for network failures\n• Missing input validation\n• No loading state management',
+                'optimize': 'Optimization suggestions:\n• Add caching for repeated requests\n• Implement request debouncing\n• Use Promise.all for parallel requests',
+                'comments': '// Fetches user data from the API\n// @param {string} userId - The user ID to fetch\n// @returns {Promise<Object>} User data object'
+            };
+            
+            const key = Object.keys(responses).find(k => message.toLowerCase().includes(k));
+            return responses[key] || 'I can help you analyze code, find bugs, and suggest improvements. Try selecting some code!';
+        }
+        
+        function addChatMessage(message, sender) {
+            const chat = document.getElementById('aiChat');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `ai-message ${sender}`;
+            
+            // Convert markdown code blocks to HTML with proper formatting
+            const formattedMessage = formatAIMessage(message);
+            messageDiv.innerHTML = formattedMessage;
+            
+            chat.appendChild(messageDiv);
+            chat.scrollTop = chat.scrollHeight;
+            
+            // Add copy buttons to code blocks with proper formatting
+            messageDiv.querySelectorAll('pre').forEach(pre => {
+                const codeElement = pre.querySelector('code');
+                if (codeElement) {
+                    // Get the raw text content and preserve formatting
+                    const codeText = codeElement.textContent;
+                    
+                    const copyBtn = document.createElement('button');
+                    copyBtn.textContent = 'Copy';
+                    copyBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; padding: 2px 8px; background: #007acc; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;';
+                    copyBtn.onclick = () => {
+                        // Copy the properly formatted code
+                        navigator.clipboard.writeText(codeText).then(() => {
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                        });
+                    };
+                    pre.style.position = 'relative';
+                    pre.appendChild(copyBtn);
+                }
+            });
+        }
+        
+        function formatAIMessage(message) {
+            // First, escape HTML to prevent XSS
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+            
+            // Process code blocks first to preserve their formatting
+            let formatted = message.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                // Preserve the code exactly as is, just escape HTML
+                return `<pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow-x: auto;"><code class="language-${lang || 'plaintext'}">${escapeHtml(code)}</code></pre>`;
+            });
+            
+            // Then process inline code
+            formatted = formatted.replace(/`([^`]+)`/g, '<code style="background: #1e1e1e; padding: 2px 4px; border-radius: 3px;">$1</code>');
+            
+            // Process other markdown
+            formatted = formatted
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .split('\n')
+                .map(line => line.trim() ? `<p style="margin: 5px 0;">${line}</p>` : '<br>')
+                .join('');
+            
+            return formatted;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showAILoading() {
+            const chat = document.getElementById('aiChat');
+            const loading = document.createElement('div');
+            loading.className = 'ai-loading';
+            loading.id = 'aiLoading';
+            loading.innerHTML = '<span></span><span></span><span></span>';
+            chat.appendChild(loading);
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        function hideAILoading() {
+            const loading = document.getElementById('aiLoading');
+            if (loading) loading.remove();
+        }
+        
+        function askAI(prompt) {
+            // Check if code is selected
+            if (editor) {
+                const selection = editor.getSelection();
+                if (selection.isEmpty() && prompt !== 'Explain this code') {
+                    // Auto-select all code if nothing is selected
+                    editor.setSelection(new monaco.Range(1, 1, editor.getModel().getLineCount(), 999999));
+                }
+            }
+            
+            document.getElementById('aiInput').value = prompt;
+            sendAIMessage();
+        }
+        
+        function handleAIInputKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendAIMessage();
+            }
+        }
+        
+        function getFileLanguage() {
+            if (!currentFile) return 'plaintext';
+            const ext = currentFile.split('.').pop();
+            return getLanguageMode(ext);
+        }
+        
+        async function analyzeCurrentFile() {
+            if (!currentFile || !editor) {
+                alert('Please open a file first');
+                return;
+            }
+            
+            const code = editor.getValue();
+            const resultsDiv = document.getElementById('analysisResults');
+            resultsDiv.innerHTML = '<div class="ai-loading"><span></span><span></span><span></span></div>';
+            
+            try {
+                const analysis = await callOpenAI(
+                    'Analyze this code for bugs, performance issues, and improvements. Format your response with clear sections.',
+                    { fullCode: code, currentFile }
+                );
+                
+                resultsDiv.innerHTML = `<div class="code-analysis">${formatAIMessage(analysis)}</div>`;
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="analysis-item">Error analyzing code</div>';
+            }
+        }
+        
+        function formatAnalysisResults(analysis) {
+            // Parse AI response and format nicely
+            return analysis
+                .split('\n')
+                .filter(line => line.trim())
+                .map(line => {
+                    let severity = 'info';
+                    if (line.toLowerCase().includes('error') || line.toLowerCase().includes('bug')) {
+                        severity = 'error';
+                    } else if (line.toLowerCase().includes('warning') || line.toLowerCase().includes('issue')) {
+                        severity = 'warning';
+                    }
+                    
+                    return `
+                        <div class="analysis-item">
+                            <span class="analysis-severity severity-${severity}">${severity}</span>
+                            <span>${line}</span>
+                        </div>
+                    `;
+                })
+                .join('');
+        }
+        
+        async function refactorCode(type) {
+            const selection = editor?.getSelection();
+            if (!selection || selection.isEmpty()) {
+                // Instead of alert, show a message in the refactor results
+                const resultsDiv = document.getElementById('refactorResults');
+                resultsDiv.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #888;">
+                        <p>Please select the code you want to refactor</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Highlight some code in the editor and try again</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const code = editor.getModel().getValueInRange(selection);
+            const resultsDiv = document.getElementById('refactorResults');
+            resultsDiv.innerHTML = '<div class="ai-loading"><span></span><span></span><span></span></div>';
+            
+            const prompts = {
+                'extract-function': 'Extract this code into a well-named function with parameters',
+                'simplify': 'Simplify this code while maintaining functionality',
+                'modern-syntax': 'Modernize this code using latest JavaScript/TypeScript features',
+                'add-types': 'Add TypeScript types to this code'
+            };
+            
+            try {
+                const refactored = await callOpenAI(prompts[type], { selection: code });
+                resultsDiv.innerHTML = formatAIMessage(refactored);
+                
+                // Add apply button
+                const applyBtn = document.createElement('button');
+                applyBtn.textContent = 'Apply Refactoring';
+                applyBtn.style.cssText = 'margin-top: 10px; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                applyBtn.onclick = () => {
+                    // Extract code from the response
+                    const codeMatch = refactored.match(/```[\w]*\n([\s\S]*?)```/);
+                    if (codeMatch) {
+                        editor.executeEdits('ai-refactor', [{
+                            range: selection,
+                            text: codeMatch[1].trim()
+                        }]);
+                    }
+                };
+                resultsDiv.appendChild(applyBtn);
+            } catch (error) {
+                resultsDiv.innerHTML = '<div>Error refactoring code</div>';
+            }
+        }
+        
+
+        function initializeTerminal() {
+            console.log('Initializing terminal...');
+            
+            // Check if terminal container exists
+            const terminalContainer = document.getElementById('terminalContainer');
+            if (!terminalContainer) {
+                console.error('Terminal container not found!');
+                return;
+            }
+            
+            // Add terminal button to status bar
+            const statusBar = document.querySelector('.status-bar');
+            if (statusBar && !document.querySelector('.terminal-btn')) {
+                const btn = document.createElement('button');
+                btn.className = 'terminal-btn';
+                btn.textContent = 'Terminal';
+                btn.onclick = toggleTerminal;
+                
+                // Find the share button or status-right
+                const shareBtn = statusBar.querySelector('.share-button');
+                const statusRight = statusBar.querySelector('.status-right');
+                
+                if (shareBtn) {
+                    statusBar.insertBefore(btn, shareBtn);
+                } else if (statusRight) {
+                    statusBar.insertBefore(btn, statusRight);
+                } else {
+                    statusBar.appendChild(btn);
+                }
+                
+                console.log('Terminal button added to status bar');
+            }
+            
+            // Setup terminal input
+            const input = document.getElementById('terminalInput');
+            if (input) {
+                // Remove any existing event listeners by cloning
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                // Add event listener to the new element
+                newInput.addEventListener('keydown', (e) => {
+                    console.log('Key pressed:', e.key);
+                    if (e.key === 'Enter') {
+                        const command = e.target.value.trim();
+                        if (command) {
+                            console.log('Executing command:', command);
+                            
+                            // Add to history
+                            terminalHistory.push(command);
+                            historyIndex = terminalHistory.length;
+                            
+                            // Show command
+                            writeToTerminal(`$ ${command}`, 'terminal-prompt');
+                            
+                            // Process command
+                            processCommand(command);
+                            
+                            // Clear input
+                            e.target.value = '';
+                        }
+                    }
+                });
+                
+                console.log('Terminal input handler attached');
+            } else {
+                console.error('Terminal input element not found!');
+            }
+            
+
+            // Add keyboard shortcut - only once
+            if (!window.terminalKeyboardSetup) {
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && (e.key === 'j' || e.key === 'J')) {
+                        e.preventDefault();
+                        toggleTerminal();
+                        console.log('Terminal toggled via Ctrl+J');
+                    }
+                });
+                window.terminalKeyboardSetup = true;
+            }
+            
+            // Add welcome message
+            const output = document.getElementById('terminalOutput');
+            if (output && output.children.length === 0) {
+                writeToTerminal('Redis IDE Terminal - Type "help" for commands', 'terminal-success');
+            }
+            
+            console.log('✅ Terminal initialization complete');
+        }
+
+        // Replace the toggleTerminal function with this:
+        function toggleTerminal() {
+            console.log('Toggle terminal clicked');
+            const terminal = document.getElementById('terminalContainer');
+            
+            if (!terminal) {
+                console.error('Terminal container not found!');
+                return;
+            }
+            
+            const isShowing = terminal.classList.contains('show');
+            
+            if (isShowing) {
+                terminal.classList.remove('show');
+                document.body.classList.remove('terminal-open');
+            } else {
+                terminal.classList.add('show');
+                document.body.classList.add('terminal-open');
+                
+                // Focus input
+                setTimeout(() => {
+                    const input = document.getElementById('terminalInput');
+                    if (input) input.focus();
+                }, 100);
+            }
+            
+            // Resize editor if exists
+            if (window.editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        function closeTerminal() {
+            const terminal = document.getElementById('terminalContainer');
+            if (terminal) {
+                terminal.style.display = 'none';
+                document.body.classList.remove('terminal-open');
+            }
+            
+            if (editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        function openTerminal() {
+            const terminal = document.getElementById('terminalContainer');
+            if (terminal) {
+                terminal.style.display = 'flex';
+                document.body.classList.add('terminal-open');
+            }
+
+            if (editor) {
+                setTimeout(() => editor.layout(), 100);
+            }
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminalOutput').innerHTML = '';
+        }
+
+        function writeToTerminal(text, classNameOrColor = '') {
+            const output = document.getElementById('terminalOutput');
+            if (!output) return;
+            
+            const line = document.createElement('div');
+            
+            // Check if it's a color (starts with #) or a className
+            if (classNameOrColor.startsWith('#')) {
+                line.style.color = classNameOrColor;
+            } else if (classNameOrColor) {
+                line.className = classNameOrColor;
+            }
+            
+            line.textContent = text;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function handleTerminalInput(e) {
+            console.log('handleTerminalInput called with key:', e.key); // Debug log
+            if (e.key !== 'Enter') return;
+            
+            const input = e.target; // Get the input element from the event
+            const command = input.value.trim(); // Use input.value instead of this.value
+            if (!command) return;
+            
+            // Add to history
+            terminalHistory.push(command);
+            historyIndex = terminalHistory.length;
+            
+            // Show command
+            writeToTerminal(`$ ${command}`, '#4ec9b0');
+            
+            // Process command
+            const [cmd, ...args] = command.split(' ');
+            
+            switch(cmd) {
+                case 'help':
+                    writeToTerminal('Available commands:');
+                    writeToTerminal('  help     - Show this help');
+                    writeToTerminal('  clear    - Clear terminal');
+                    writeToTerminal('  node     - Run JavaScript file');
+                    writeToTerminal('  ls       - List files');
+                    writeToTerminal('  git      - Git commands');
+                    writeToTerminal('  npm      - NPM commands');
+                    break;
+                    
+                case 'clear':
+                    clearTerminal();
+                    break;
+                    
+                case 'node':
+                    executeNodeCommand(args.join(' '));
+                    break;
+                    
+                case 'ls':
+                    writeToTerminal('src/  components/  utils/  package.json  README.md', '#4ec9b0');
+                    break;
+                    
+                case 'git':
+                    handleGitCommand(args);
+                    break;
+                    
+                case 'npm':
+                    handleNpmCommand(args);
+                    break;
+                    
+                default:
+                    writeToTerminal(`Command not found: ${cmd}`, '#f48771');
+            }
+            
+            input.value = ''; // Clear using input.value instead of this.value
+        }
+
+        function executeNodeCommand(filename) {
+            if (!window.editor) {
+                writeToTerminal('Error: No editor found', '#f48771');
+                return;
+            }
+            
+            writeToTerminal(`Running ${filename || 'current file'}...`, '#4ec9b0');
+            
+            try {
+                const code = editor.getValue();
+                
+                // Create custom console
+                const customConsole = {
+                    log: (...args) => writeToTerminal(args.join(' ')),
+                    error: (...args) => writeToTerminal('❌ ' + args.join(' '), '#f48771'),
+                    warn: (...args) => writeToTerminal('⚠️ ' + args.join(' '), '#dcdcaa')
+                };
+                
+                // Execute code
+                const func = new Function('console', code);
+                func(customConsole);
+                
+                writeToTerminal('✓ Execution completed', '#4ec9b0');
+                
+            } catch (error) {
+                writeToTerminal(`Error: ${error.message}`, '#f48771');
+            }
+        }
+
+        function handleGitCommand(args) {
+            const subCmd = args[0];
+            
+            switch(subCmd) {
+                case 'status':
+                    writeToTerminal('On branch main');
+                    writeToTerminal('Your branch is up to date with origin/main');
+                    writeToTerminal('');
+                    writeToTerminal('Changes not staged for commit:');
+                    writeToTerminal('  modified: src/userService.js', '#f48771');
+                    break;
+                    
+                case 'add':
+                    writeToTerminal('Changes staged for commit', '#4ec9b0');
+                    break;
+                    
+                case 'commit':
+                    if (args.includes('-m')) {
+                        writeToTerminal('[main abc123] ' + args.slice(args.indexOf('-m') + 1).join(' '), '#4ec9b0');
+                    }
+                    break;
+                    
+                default:
+                    writeToTerminal('Usage: git [status|add|commit]');
+            }
+        }
+
+        function handleNpmCommand(args) {
+            const subCmd = args[0];
+            
+            switch(subCmd) {
+                case 'install':
+                    writeToTerminal('Installing dependencies...', '#dcdcaa');
+                    setTimeout(() => {
+                        writeToTerminal('✓ Dependencies installed', '#4ec9b0');
+                    }, 1000);
+                    break;
+                    
+                case 'start':
+                    writeToTerminal('Starting server...', '#dcdcaa');
+                    writeToTerminal('Server running on http://localhost:3000', '#4ec9b0');
+                    break;
+                    
+                default:
+                    writeToTerminal('Usage: npm [install|start]');
+            }
+        }
+
+        // Combined initialization - Only ONE initializeApp override!
+        (function() {
+            const originalInitializeApp = initializeApp;
+            initializeApp = async function() {
+                console.log('Starting full initialization...');
+                
+                // Call original
+                await originalInitializeApp();
+                
+                // Initialize all features
+                console.log('Initializing Collaboration...');
+                initializeCollaboration();
+                
+                console.log('Initializing AI...');
+                initializeAI();
+                
+                // Delay terminal init to ensure DOM is ready
+                setTimeout(() => {
+                    console.log('Initializing Terminal...');
+                    initializeTerminal();
+                }, 100);
+                
+                console.log('All features initialized!');
+            };
+        })();
+
     </script>
 </body>
 </html>
