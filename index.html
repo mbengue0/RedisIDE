@@ -2276,9 +2276,9 @@
                 }
                 currentProject = data.project;
     
-                // Make sure this is called
-                if (socket && isConnected) {
-                    console.log('Joining project room:', projectId); // Debug
+               // Make sure to join the room AFTER project is loaded
+                if (socket && isConnected && currentProject) {
+                    console.log('Joining project room:', currentProject.id);
                     socket.emit('join-project', {
                         projectId: currentProject.id,
                         user: currentUser
@@ -3481,16 +3481,28 @@
                 console.log('Socket ID:', socket.id);
                 isConnected = true;
                 updateStatus('Connected to collaboration server');
-                
-                if (currentProject) {
-                    console.log('Joining project:', currentProject.id);
+
+                waitForProjectAndJoin();
+            });
+
+            function waitForProjectAndJoin() {
+                if (currentProject && currentProject.id) {
+                    console.log('🚪 Emitting join-project for project:', currentProject.id);
                     socket.emit('join-project', {
                         projectId: currentProject.id,
                         user: currentUser
                     });
+                } else {
+                    console.log('⏳ Waiting for currentProject to be ready...');
+                    setTimeout(waitForProjectAndJoin, 200); // Retry every 200ms
                 }
+            }
+
+            // Add this to see ALL events
+            socket.onAny((eventName, ...args) => {
+                console.log(`Received event: ${eventName}`, args);
             });
-            
+
             socket.on('connect_error', (error) => {
                 console.error('❌ Connection error:', error.message);
                 console.error('Error type:', error.type);
@@ -3839,9 +3851,14 @@
             });
 
             // Set up keyboard shortcuts
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-                saveCurrentFile();
-            });
+            if (editor) {
+                editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                    saveCurrentFile();
+                });
+            } else {
+                console.warn('Editor not initialized when trying to add command');
+            }
+
 
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
                 if (currentFile) {

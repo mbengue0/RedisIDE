@@ -26,7 +26,6 @@ const io = socketIO(server, {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));// Serve static files from the root directory
-app.use(express.static(path.join(__dirname, '..')));
 
 // Serve index.html for the root route
 app.get('/', (req, res) => {
@@ -74,15 +73,21 @@ io.on('connection', (socket) => {
     
     socket.on('code-change', (data) => {
         const room = `project-${data.projectId}`;
-        console.log(`Broadcasting code change in room ${room} from user ${data.userId}`);
         
-        // Check who's in the room
-        const roomUsers = io.sockets.adapter.rooms.get(room);
-        console.log(`Users in room: ${roomUsers ? Array.from(roomUsers).join(', ') : 'none'}`);
+        // Add logging to debug
+        console.log(`Code change in room ${room}`);
+        console.log(`Sender socket: ${socket.id}`);
         
+        // Get all sockets in the room
+        const socketsInRoom = io.sockets.adapter.rooms.get(room);
+        if (socketsInRoom) {
+            console.log(`Broadcasting to ${socketsInRoom.size - 1} other users in room`);
+        }
+        
+        // Broadcast to everyone in the room except sender
         socket.to(room).emit('code-change', {
             ...data,
-            userId: data.userId,  // Use data.userId, not the closure userId
+            userId: data.userId,  // Make sure to use data.userId
             userName: userName
         });
     });
