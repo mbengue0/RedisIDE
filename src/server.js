@@ -14,18 +14,23 @@ const app = express();
 // Then create HTTP server with the app
 const server = http.createServer(app);
 
-// Then create Socket.IO instance
+// Then create Socket.IO instance with better configuration
 const io = socketIO(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    // Add these options for better debugging
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    transports: ['websocket', 'polling']
 });
 
 // Apply middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..')));// Serve static files from the root directory
+app.use(express.static(path.join(__dirname, '..')));
 
 // Serve index.html for the root route
 app.get('/', (req, res) => {
@@ -51,10 +56,18 @@ io.on('connection', (socket) => {
     
     socket.on('join-project', (data) => {
         const room = `project-${data.projectId}`;
-        console.log(`User ${userId} joining room ${room}`);
+        console.log(`User ${data.user.name} (${data.user.id}) joining room ${room}`);
+        
+        // Leave any previous rooms (except the socket's own room)
+        socket.rooms.forEach(r => {
+            if (r !== socket.id && r.startsWith('project-')) {
+                socket.leave(r);
+            }
+        });
+        
         socket.join(room);
 
-         // Log how many users are in the room
+        // Log room details
         const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
         console.log(`Room ${room} now has ${roomSize} users`);
         
@@ -74,29 +87,38 @@ io.on('connection', (socket) => {
     socket.on('code-change', (data) => {
         const room = `project-${data.projectId}`;
         
-        // Add logging to debug
-        console.log(`Code change in room ${room}`);
-        console.log(`Sender socket: ${socket.id}`);
+        console.log('\n📝 CODE CHANGE EVENT:');
+        console.log('   From user:', data.userId);
+        console.log('   From socket:', socket.id);
+        console.log('   To room:', room);
         
-        // Get all sockets in the room
-        const socketsInRoom = io.sockets.adapter.rooms.get(room);
-        if (socketsInRoom) {
-            console.log(`Broadcasting to ${socketsInRoom.size - 1} other users in room`);
+        // Get room info
+        const roomSockets = io.sockets.adapter.rooms.get(room);
+        if (roomSockets) {
+            console.log('   Sockets in room:', Array.from(roomSockets).join(', '));
+            console.log('   Broadcasting to:', roomSockets.size - 1, 'other users');
+            
+            // Broadcast to all OTHER sockets in the room
+            socket.to(room).emit('code-change', {
+                projectId: data.projectId,
+                file: data.file,
+                change: data.change,
+                content: data.content,
+                userId: data.userId,
+                userName: data.userName || userName
+            });
+            
+            console.log('   ✅ Broadcast sent');
+        } else {
+            console.log('   ❌ NO ROOM FOUND!');
         }
-        
-        // Broadcast to everyone in the room except sender
-        socket.to(room).emit('code-change', {
-            ...data,
-            userId: data.userId,  // Make sure to use data.userId
-            userName: userName
-        });
     });
     
     socket.on('cursor-change', (data) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('cursor-change', {
             ...data,
-            userId: data.userId  // Use data.userId
+            userId: data.userId
         });
     });
     
@@ -104,8 +126,8 @@ io.on('connection', (socket) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('file-created', {
             ...data,
-            userId: data.userId,  // Use data.userId
-            userName: userName
+            userId: data.userId,
+            userName: data.userName || userName
         });
     });
     
@@ -113,24 +135,38 @@ io.on('connection', (socket) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('file-deleted', {
             ...data,
-            userId: data.userId,  // Use data.userId
-            userName: userName
+            userId: data.userId,
+            userName: data.userName || userName
         });
+    });
+    
+    // Add ping-pong for testing
+    socket.on('ping', () => {
+        console.log('Received ping from:', socket.id);
+        socket.emit('pong', { time: Date.now() });
     });
     
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         
+        const user = activeUsers.get(socket.id);
+        
         // Notify all rooms this user was in
         socket.rooms.forEach(room => {
             if (room !== socket.id) {
-                socket.to(room).emit('user-left', { userId: userId });
+                socket.to(room).emit('user-left', { userId: user?.id || userId });
             }
         });
         
         activeUsers.delete(socket.id);
     });
 });
+
+// Add Socket.IO debugging
+io.on('connection_error', (err) => {
+    console.error('Socket.IO connection error:', err.message);
+});
+
 // Project endpoints
 // Create new project
 app.post('/api/projects', async (req, res) => {
@@ -305,11 +341,10 @@ app.put('/api/projects/:projectId/rename', async (req, res) => {
     }
 });
 
-// In server.js, ensure the delete folder endpoint looks like this:
+// Delete folder endpoint
 app.delete('/api/projects/:projectId/folders/:folderPath(*)', async (req, res) => {
     try {
         const { projectId } = req.params;
-        // Handle the wildcard parameter correctly
         const folderPath = req.params.folderPath || req.params[0] || '';
         
         console.log('Server: Deleting folder:', folderPath, 'from project:', projectId);
@@ -426,8 +461,10 @@ async function startServer() {
         
         // Optional: reindex existing files
         await searchManager.reindexAllFiles();
+        
         server.listen(process.env.PORT || 3000, () => {
             console.log(`Server running on port ${process.env.PORT || 3000}`);
+            console.log('Socket.IO is ready for connections');
         });
     } catch (error) {
         console.error('Failed to start server:', error);

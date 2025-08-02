@@ -1461,7 +1461,7 @@
     </div>
     
     <!-- Scripts -->
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
     
     <script>
@@ -3461,19 +3461,15 @@
         
         function connectWebSocket() {
             console.log('🔌 Attempting to connect to WebSocket...');
-            console.log('Session ID:', sessionId);
-            console.log('User:', currentUser);
             
-            // Try connecting with explicit URL
-            const socket = io(window.location.origin, {
+            socket = io(window.location.origin, {
                 query: {
                     sessionId: sessionId,
                     userId: currentUser.id,
                     userName: currentUser.name,
                     userColor: currentUser.color
                 },
-                transports: ['websocket', 'polling'], // Force transport methods
-                reconnection: true
+                transports: ['websocket', 'polling']
             });
             
             socket.on('connect', () => {
@@ -3481,31 +3477,18 @@
                 console.log('Socket ID:', socket.id);
                 isConnected = true;
                 updateStatus('Connected to collaboration server');
-
-                waitForProjectAndJoin();
-            });
-
-            function waitForProjectAndJoin() {
+                
+                // Join project if one is loaded
                 if (currentProject && currentProject.id) {
-                    console.log('🚪 Emitting join-project for project:', currentProject.id);
                     socket.emit('join-project', {
                         projectId: currentProject.id,
                         user: currentUser
                     });
-                } else {
-                    console.log('⏳ Waiting for currentProject to be ready...');
-                    setTimeout(waitForProjectAndJoin, 200); // Retry every 200ms
                 }
-            }
-
-            // Add this to see ALL events
-            socket.onAny((eventName, ...args) => {
-                console.log(`Received event: ${eventName}`, args);
             });
-
+            
             socket.on('connect_error', (error) => {
                 console.error('❌ Connection error:', error.message);
-                console.error('Error type:', error.type);
             });
             
             socket.on('disconnect', (reason) => {
@@ -3514,7 +3497,58 @@
                 updateStatus('Disconnected from collaboration server', true);
             });
             
-            // Handle user events
+            // Handle code changes - THIS IS THE KEY FIX
+            socket.on('code-change', (data) => {
+                console.log('📥 Received code change from:', data.userId);
+                console.log('   My userId:', currentUser.id);
+                console.log('   File:', data.file);
+                console.log('   Current file:', currentFile);
+                
+                // Skip if it's our own change
+                if (data.userId === currentUser.id) {
+                    console.log('   → Skipping (own change)');
+                    return;
+                }
+                
+                // Skip if it's for a different file
+                if (data.file !== currentFile) {
+                    console.log('   → Skipping (different file)');
+                    return;
+                }
+                
+                // Apply the change
+                if (editor && editor.getModel()) {
+                    console.log('   → Applying change');
+                    isApplyingRemoteChange = true;
+                    
+                    try {
+                        const model = editor.getModel();
+                        model.pushEditOperations([], [{
+                            range: new monaco.Range(
+                                data.change.range.startLineNumber,
+                                data.change.range.startColumn,
+                                data.change.range.endLineNumber,
+                                data.change.range.endColumn
+                            ),
+                            text: data.change.text
+                        }], () => null);
+                        
+                        console.log('   ✅ Change applied successfully');
+                    } catch (error) {
+                        console.error('   ❌ Error applying change:', error);
+                    } finally {
+                        isApplyingRemoteChange = false;
+                    }
+                    
+                    // Update file content in memory
+                    if (openFiles.has(data.file)) {
+                        const fileData = openFiles.get(data.file);
+                        fileData.content = data.content;
+                    }
+                }
+            });
+            
+            // Other event handlers remain the same...
             socket.on('user-joined', (data) => {
                 console.log('User joined:', data.user.name);
                 collaborators.set(data.user.id, data.user);
@@ -3541,79 +3575,6 @@
                     }
                 });
                 updateCollaboratorsList();
-            });
-            
-            // Handle code changes
-            socket.on('code-change', (data) => {
-                console.log('Received change. My ID:', currentUser.id, 'Sender ID:', data.userId);
-                // Convert both to strings for comparison
-                if (String(data.userId) === String(currentUser.id)) {
-                    console.log('Ignoring my own change'); // Add this
-                    return;
-                }
-    
-                if (editor && currentFile === data.file) {
-                    console.log('Applying change to editor'); // Add this
-                    const model = editor.getModel();
-                    if (model) {
-                        isApplyingRemoteChange = true;
-                        
-                        // Apply the change with error handling
-                        try {
-                            model.pushEditOperations([], [{
-                                range: new monaco.Range(
-                                    data.change.range.startLineNumber,
-                                    data.change.range.startColumn,
-                                    data.change.range.endLineNumber,
-                                    data.change.range.endColumn
-                                ),
-                                text: data.change.text
-                            }], () => null);
-                            console.log('Change applied successfully'); // Add this
-                        } catch (error) {
-                            console.error('Error applying remote change:', error);
-                        }
-                        
-                        isApplyingRemoteChange = false;
-                    }   
-                } else {
-                    console.log('Change is for different file. Current:', currentFile, 'Change file:', data.file);
-                }
-                
-                // Update file content in memory
-                if (openFiles.has(data.file)) {
-                    const fileData = openFiles.get(data.file);
-                    fileData.content = data.content;
-                    openFiles.set(data.file, fileData);
-                }
-            });
-            
-            // Handle cursor/selection changes
-            socket.on('cursor-change', (data) => {
-                if (data.userId === currentUser.id) return;
-                
-                if (editor && currentFile === data.file) {
-                    updateRemoteCursor(data.userId, data.position, data.selection);
-                }
-            });
-            
-            // Handle file operations
-            socket.on('file-created', async (data) => {
-                if (data.userId === currentUser.id) return;
-                await loadProjectFiles();
-                showNotification(`${data.userName} created ${data.filepath}`);
-            });
-            
-            socket.on('file-deleted', async (data) => {
-                if (data.userId === currentUser.id) return;
-                await loadProjectFiles();
-                showNotification(`${data.userName} deleted ${data.filepath}`);
-            });
-            
-            socket.on('file-renamed', async (data) => {
-                if (data.userId === currentUser.id) return;
-                await loadProjectFiles();
-                showNotification(`${data.userName} renamed ${data.oldPath} to ${data.newPath}`);
             });
         }
         
@@ -3870,29 +3831,54 @@
             editor.addCommand(monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
                 editor.getAction('editor.action.formatDocument').run();
             });
-            // Add collaboration handlers
+            // In your initializeEditor function, update the change handler:
             editor.onDidChangeModelContent((e) => {
-                if (isApplyingRemoteChange) return; // Don't broadcast remote changes
+                // Skip if applying remote change
+                if (isApplyingRemoteChange) {
+                    return;
+                }
                 
-                console.log('Sending code change to server'); // Debug
+                // Handle local file changes
+                if (currentFile && openFiles.has(currentFile)) {
+                    const fileData = openFiles.get(currentFile);
+                    fileData.content = editor.getValue();
+                    fileData.dirty = true;
+                    openFiles.set(currentFile, fileData);
+                    updateTabs();
+                    updateStatus('Modified');
+                    
+                    // Auto-save
+                    clearTimeout(window.saveTimeout);
+                    window.saveTimeout = setTimeout(() => {
+                        saveCurrentFile();
+                    }, 1000);
+                }
                 
+                // Send changes to collaborators
                 if (currentFile && socket && isConnected && currentProject) {
+                    console.log('📤 Sending changes to server');
                     const content = editor.getValue();
                     
-                    // Send each change
                     e.changes.forEach(change => {
-                        console.log('Sending change:', change); // Debug
-                        
-                        socket.emit('code-change', {
+                        const changeData = {
                             projectId: currentProject.id,
                             file: currentFile,
                             change: {
-                                range: change.range,
+                                range: {
+                                    startLineNumber: change.range.startLineNumber,
+                                    startColumn: change.range.startColumn,
+                                    endLineNumber: change.range.endLineNumber,
+                                    endColumn: change.range.endColumn
+                                },
                                 text: change.text
                             },
                             content: content,
-                            userId: currentUser.id // Add this
-                        });
+                            userId: currentUser.id,
+                            userName: currentUser.name
+                        };
+                        
+                        console.log('   Sending change:', changeData);
+                        socket.emit('code-change', changeData);
                     });
                 }
             });
