@@ -52,7 +52,12 @@ io.on('connection', (socket) => {
     
     socket.on('join-project', (data) => {
         const room = `project-${data.projectId}`;
+        console.log(`User ${userId} joining room ${room}`);
         socket.join(room);
+
+         // Log how many users are in the room
+        const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+        console.log(`Room ${room} now has ${roomSize} users`);
         
         // Notify others in the project
         socket.to(room).emit('user-joined', { user: data.user });
@@ -69,9 +74,15 @@ io.on('connection', (socket) => {
     
     socket.on('code-change', (data) => {
         const room = `project-${data.projectId}`;
+        console.log(`Broadcasting code change in room ${room} from user ${data.userId}`);
+        
+        // Check who's in the room
+        const roomUsers = io.sockets.adapter.rooms.get(room);
+        console.log(`Users in room: ${roomUsers ? Array.from(roomUsers).join(', ') : 'none'}`);
+        
         socket.to(room).emit('code-change', {
             ...data,
-            userId: userId,
+            userId: data.userId,  // Use data.userId, not the closure userId
             userName: userName
         });
     });
@@ -80,7 +91,7 @@ io.on('connection', (socket) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('cursor-change', {
             ...data,
-            userId: userId
+            userId: data.userId  // Use data.userId
         });
     });
     
@@ -88,7 +99,7 @@ io.on('connection', (socket) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('file-created', {
             ...data,
-            userId: userId,
+            userId: data.userId,  // Use data.userId
             userName: userName
         });
     });
@@ -97,7 +108,7 @@ io.on('connection', (socket) => {
         const room = `project-${data.projectId}`;
         socket.to(room).emit('file-deleted', {
             ...data,
-            userId: userId,
+            userId: data.userId,  // Use data.userId
             userName: userName
         });
     });

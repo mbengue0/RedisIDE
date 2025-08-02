@@ -1589,6 +1589,7 @@
         
         // Open file with Monaco
         async function openFile(filepath) {
+            console.log('Opening file:', filepath); // Add this
             if (!currentProject) return;
             
             // Check if file is already open
@@ -2275,13 +2276,13 @@
                 }
                 currentProject = data.project;
     
-                // JOIN THE COLLABORATION ROOM
+                // Make sure this is called
                 if (socket && isConnected) {
+                    console.log('Joining project room:', projectId); // Debug
                     socket.emit('join-project', {
                         projectId: currentProject.id,
                         user: currentUser
                     });
-                    console.log('Joined project room on load');
                 }
 
                 await loadProjectFiles();
@@ -2290,6 +2291,7 @@
                 console.error('Error loading project:', error);
                 updateStatus('Error loading project', true);
             }
+            
         }
 
         // Load project files
@@ -3437,6 +3439,7 @@
             // Get or create user
             const stored = localStorage.getItem('collabUser');
             currentUser = stored ? JSON.parse(stored) : generateUser();
+            console.log('My user info:', currentUser);
             localStorage.setItem('collabUser', JSON.stringify(currentUser));
             
             // Get session from URL or create new
@@ -3530,9 +3533,15 @@
             
             // Handle code changes
             socket.on('code-change', (data) => {
-                if (data.userId === currentUser.id) return;
+                console.log('Received change. My ID:', currentUser.id, 'Sender ID:', data.userId);
+                // Convert both to strings for comparison
+                if (String(data.userId) === String(currentUser.id)) {
+                    console.log('Ignoring my own change'); // Add this
+                    return;
+                }
     
                 if (editor && currentFile === data.file) {
+                    console.log('Applying change to editor'); // Add this
                     const model = editor.getModel();
                     if (model) {
                         isApplyingRemoteChange = true;
@@ -3548,12 +3557,15 @@
                                 ),
                                 text: data.change.text
                             }], () => null);
+                            console.log('Change applied successfully'); // Add this
                         } catch (error) {
                             console.error('Error applying remote change:', error);
                         }
                         
                         isApplyingRemoteChange = false;
-                    }
+                    }   
+                } else {
+                    console.log('Change is for different file. Current:', currentFile, 'Change file:', data.file);
                 }
                 
                 // Update file content in memory
@@ -3845,7 +3857,7 @@
             editor.onDidChangeModelContent((e) => {
                 if (isApplyingRemoteChange) return; // Don't broadcast remote changes
                 
-                console.log('Content changed locally'); // Debug
+                console.log('Sending code change to server'); // Debug
                 
                 if (currentFile && socket && isConnected && currentProject) {
                     const content = editor.getValue();
