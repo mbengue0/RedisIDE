@@ -1175,7 +1175,13 @@
                 <select id="projectSelector" class="project-selector">
                     <option value="">Select a project...</option>
                 </select>
-                <button class="new-project-btn" onclick="showNewProjectModal()">+ New Project</button>
+                <div style="display: flex; gap: 5px; margin-top: 10px;">
+                    <button class="new-project-btn" onclick="showNewProjectModal()" style="flex: 1;">+ New Project</button>
+                    <button onclick="showProjectManagement()" 
+                            style="flex: 1; padding: 8px; background-color: #3c3c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                        📋 Manage
+                    </button>
+                </div>
             </div>
             
             <!-- Search Box -->
@@ -1426,6 +1432,23 @@
         </div>
     </div>
 
+    <!-- Project Management Modal -->
+    <div id="projectManagementModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Manage Projects</h3>
+                <button onclick="closeModal('projectManagementModal')" style="float: right; background: none; border: none; font-size: 20px; cursor: pointer;">×</button>
+            </div>
+            <div id="projectsList" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
+                <!-- Projects will be listed here -->
+            </div>
+            <div class="modal-buttons">
+                <button class="primary" onclick="showNewProjectModal()">+ New Project</button>
+                <button class="secondary" onclick="closeModal('projectManagementModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Add this RIGHT BEFORE </body> in your ai-ide.html -->
     <div id="simpleTerminal" style="position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: #1e1e1e; border-top: 3px solid #007acc; display: none; z-index: 9999;">
         <div style="padding: 10px; height: 100%; display: flex; flex-direction: column;">
@@ -1520,6 +1543,7 @@
             }
         }
 
+        /*
         // Check if API key exists on load
         if (!groqApiKey) {
             setTimeout(() => {
@@ -1528,7 +1552,8 @@
                 }
             }, 1000);
         }
-        
+        */
+
         // Configure Monaco loader
         require.config({ 
             paths: { 
@@ -2852,6 +2877,217 @@
             }
         }
 
+        async function deleteCurrentProject() {
+            if (!currentProject) {
+                alert('Please select a project first');
+                return;
+            }
+            
+            const projectName = currentProject.name;
+            const projectId = currentProject.id;
+            
+            if (!confirm(`Delete project "${projectName}" and ALL its files? This cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    // Clear everything related to the deleted project
+                    currentProject = null;
+                    currentFile = null;
+                    currentFolder = null;
+                    
+                    // Clear all open files
+                    openFiles.forEach((fileData, filepath) => {
+                        if (fileData.model) {
+                            fileData.model.dispose();
+                        }
+                    });
+                    openFiles.clear();
+                    
+                    // Clear the UI
+                    document.getElementById('fileTree').innerHTML = 
+                        '<div style="padding: 20px; text-align: center; color: #888;">Select or create a project</div>';
+                    
+                    // Clear editor
+                    if (editor) {
+                        editor.setValue('// No project selected');
+                    }
+                    
+                    // Clear tabs
+                    document.getElementById('editorTabs').innerHTML = '';
+                    
+                    // Reset project selector
+                    document.getElementById('projectSelector').value = '';
+                    
+                    // Update status
+                    updateStatus(`Project "${projectName}" deleted successfully`);
+                    
+                    // Reload project list
+                    await loadProjects();
+                    
+                    // If using collaboration, leave the room
+                    if (socket && isConnected) {
+                        socket.emit('leave-project', { projectId });
+                    }
+                } else {
+                    throw new Error('Failed to delete project');
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+                updateStatus('Error deleting project', true);
+            }
+        }
+
+        // Add this function to show project management
+        async function showProjectManagement() {
+            const modal = document.getElementById('projectManagementModal');
+            const listDiv = document.getElementById('projectsList');
+            
+            try {
+                const response = await fetch(`${API_URL}/projects`);
+                const data = await response.json();
+                
+                if (data.projects.length === 0) {
+                    listDiv.innerHTML = '<p style="text-align: center; color: #888;">No projects yet</p>';
+                } else {
+                    listDiv.innerHTML = data.projects.map(project => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #3e3e42;">
+                            <div>
+                                <strong>${project.name}</strong>
+                                ${project.description ? `<br><small style="color: #888;">${project.description}</small>` : ''}
+                                <br><small style="color: #666;">Created: ${new Date(project.createdAt).toLocaleDateString()}</small>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button onclick="loadProject('${project.id}'); closeModal('projectManagementModal');" 
+                                        style="padding: 5px 10px; background: #0e639c; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                    Open
+                                </button>
+                                <button onclick="startInlineProjectRename('${project.id}', '${project.name}', this)" 
+                                        style="padding: 5px 10px; background: #3c3c3c; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                    Rename
+                                </button>
+                                <button id="delete-${project.id}"
+                                        onclick="confirmDeleteProject('${project.id}', '${project.name}')" 
+                                        style="padding: 5px 10px; background: #d73a49; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                    Delete
+                                </button>
+                                <div id="confirm-${project.id}" style="display: none; gap: 5px;">
+                                    <span style="color: #f48771;">Sure?</span>
+                                    <button onclick="deleteProjectFromList('${project.id}', '${project.name}')" 
+                                            style="padding: 3px 8px; background: #d73a49; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">
+                                        Yes
+                                    </button>
+                                    <button onclick="cancelDeleteProject('${project.id}')" 
+                                            style="padding: 3px 8px; background: #3c3c3c; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">
+                                        No
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                listDiv.innerHTML = '<p style="color: #f48771;">Error loading projects</p>';
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        // Add these new functions for inline confirmation
+        function confirmDeleteProject(projectId, projectName) {
+            document.getElementById(`delete-${projectId}`).style.display = 'none';
+            document.getElementById(`confirm-${projectId}`).style.display = 'flex';
+        }
+
+        function cancelDeleteProject(projectId) {
+            document.getElementById(`delete-${projectId}`).style.display = 'inline-block';
+            document.getElementById(`confirm-${projectId}`).style.display = 'none';
+        }
+
+        // Inline rename function
+        function startInlineProjectRename(projectId, oldName, button) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = oldName;
+            input.style.cssText = 'padding: 5px; background: #3c3c3c; color: white; border: 1px solid #007acc; border-radius: 3px;';
+            
+            button.style.display = 'none';
+            button.parentElement.insertBefore(input, button);
+            input.focus();
+            input.select();
+            
+            const finishRename = async () => {
+                const newName = input.value.trim();
+                if (newName && newName !== oldName) {
+                    try {
+                        const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newName })
+                        });
+                        
+                        if (response.ok) {
+                            updateStatus(`Project renamed to ${newName}`);
+                            showProjectManagement(); // Refresh the list
+                            await loadProjects(); // Update dropdown
+                            if (currentProject && currentProject.id === projectId) {
+                                currentProject.name = newName;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error renaming project:', error);
+                    }
+                }
+                input.remove();
+                button.style.display = 'inline-block';
+            };
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') finishRename();
+                if (e.key === 'Escape') {
+                    input.remove();
+                    button.style.display = 'inline-block';
+                }
+            });
+            
+            input.addEventListener('blur', finishRename);
+        }
+
+        // Update deleteProjectFromList to not show confirm
+        async function deleteProjectFromList(projectId, projectName) {
+            try {
+                const response = await fetch(`${API_URL}/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    // Clean up if current project
+                    if (currentProject && currentProject.id === projectId) {
+                        currentProject = null;
+                        currentFile = null;
+                        currentFolder = null;
+                        openFiles.clear();
+                        document.getElementById('fileTree').innerHTML = 
+                            '<div style="padding: 20px; text-align: center; color: #888;">Select or create a project</div>';
+                        if (editor) editor.setValue('// No project selected');
+                        document.getElementById('editorTabs').innerHTML = '';
+                        document.getElementById('projectSelector').value = '';
+                    }
+                    
+                    showProjectManagement();
+                    await loadProjects();
+                    updateStatus(`Project "${projectName}" deleted`);
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+            }
+        }
+
         // Update showContextMenu to store the element
         function showContextMenu(event, path, type) {
             event.preventDefault();
@@ -3719,6 +3955,17 @@
         }
         
         async function sendAIMessage() {
+            // Check API key only when needed
+            if (!groqApiKey) {
+                groqApiKey = localStorage.getItem('groq_api_key') || '';
+                if (!groqApiKey) {
+                    if (confirm('AI features require an API key. Would you like to add one now?')) {
+                        setGroqAPIKey();
+                        return;
+                    }
+                    return;
+                }
+            }
             const input = document.getElementById('aiInput');
             const message = input.value.trim();
             
