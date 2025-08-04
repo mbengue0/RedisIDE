@@ -7,6 +7,9 @@ const socketIO = require('socket.io');
 const { connectRedis, getClient } = require('./redisClient');
 const projectManager = require('./projectManager');
 const searchManager = require('./searchManager');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 // Create Express app FIRST
 const app = express();
@@ -544,6 +547,172 @@ app.get('/api/projects/:projectId/search', async (req, res) => {
     } catch (error) {
         console.error('Error searching in project:', error);
         res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// Git endpoints
+// Add these Git endpoints that work with Redis
+app.post('/api/projects/:projectId/git/init', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        // Initialize git metadata in Redis
+        await redisClient.hSet(`project:${projectId}:git`, {
+            initialized: 'true',
+            currentBranch: 'main',
+            createdAt: new Date().toISOString()
+        });
+        
+        // Create initial commit
+        const commitId = `commit:${Date.now()}`;
+        await redisClient.hSet(commitId, {
+            message: 'Initial commit',
+            author: 'System',
+            timestamp: new Date().toISOString(),
+            projectId: projectId
+        });
+        
+        res.json({ success: true, message: 'Git repository initialized' });
+    } catch (error) {
+        console.error('Git init error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/projects/:projectId/git/status', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        // Check if git is initialized
+        const gitData = await redisClient.hGetAll(`project:${projectId}:git`);
+        if (!gitData.initialized) {
+            return res.status(404).json({ error: 'No git repository' });
+        }
+        
+        // Get tracked files and their status
+        const files = await projectManager.listProjectFiles(projectId);
+        const trackedFiles = await redisClient.hGetAll(`project:${projectId}:git:tracked`);
+        
+        const gitFiles = [];
+        
+        for (const file of files) {
+            const currentContent = await redisClient.hGet(`project:${projectId}:file:${file.filepath}`, 'content');
+            const lastCommitContent = trackedFiles[file.filepath];
+            
+            if (!lastCommitContent) {
+                // New file
+                gitFiles.push({
+                    status: '??',
+                    path: file.filepath,
+                    staged: false,
+                    modified: false
+                });
+            } else if (currentContent !== lastCommitContent) {
+                // Modified file
+                gitFiles.push({
+                    status: 'M',
+                    path: file.filepath,
+                    staged: false,
+                    modified: true
+                });
+            }
+        }
+        
+        res.json({ files: gitFiles });
+    } catch (error) {
+        console.error('Git status error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/projects/:projectId/git/add', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { files } = req.body;
+        
+        // Mark files as staged in Redis
+        for (const file of files) {
+            await redisClient.hSet(`project:${projectId}:git:staged`, file, 'true');
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Git add error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/projects/:projectId/git/commit', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { message } = req.body;
+        
+        // Get staged files
+        const stagedFiles = await redisClient.hGetAll(`project:${projectId}:git:staged`);
+        const filesToCommit = Object.keys(stagedFiles);
+        
+        if (filesToCommit.length === 0) {
+            return res.status(400).json({ error: 'No files staged for commit' });
+        }
+        
+        // Create commit object
+        const commitId = `commit:${projectId}:${Date.now()}`;
+        const commitData = {
+            message: message,
+            author: 'User', // You could get this from session
+            timestamp: new Date().toISOString(),
+            projectId: projectId,
+            files: JSON.stringify(filesToCommit)
+        };
+        
+        await redisClient.hSet(commitId, commitData);
+        
+        // Update tracked files with current content
+        for (const filepath of filesToCommit) {
+            const content = await redisClient.hGet(`project:${projectId}:file:${filepath}`, 'content');
+            await redisClient.hSet(`project:${projectId}:git:tracked`, filepath, content || '');
+        }
+        
+        // Clear staged files
+        await redisClient.del(`project:${projectId}:git:staged`);
+        
+        // Add commit to project's commit list
+        await redisClient.lPush(`project:${projectId}:commits`, commitId);
+        
+        res.json({ 
+            success: true, 
+            output: `[main ${commitId.split(':').pop()}] ${message}\n ${filesToCommit.length} files changed` 
+        });
+    } catch (error) {
+        console.error('Git commit error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/projects/:projectId/git/log', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        // Get commit IDs
+        const commitIds = await redisClient.lRange(`project:${projectId}:commits`, 0, 9);
+        
+        const commits = [];
+        for (const commitId of commitIds) {
+            const commitData = await redisClient.hGetAll(commitId);
+            if (commitData.message) {
+                commits.push({
+                    hash: commitId.split(':').pop().substring(0, 7),
+                    message: commitData.message,
+                    author: commitData.author,
+                    timestamp: commitData.timestamp
+                });
+            }
+        }
+        
+        res.json({ commits });
+    } catch (error) {
+        console.error('Git log error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
