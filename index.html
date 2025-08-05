@@ -67,6 +67,25 @@
         .new-project-btn:hover {
             background-color: #1177bb;
         }
+
+        /* File change headers */
+        .file-change-header {
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .file-change-header:hover {
+            background: #3e3e42 !important;
+        }
+
+        /* Status indicators */
+        .file-status.added {
+            color: #4ec9b0;
+        }
+
+        .file-status.modified {
+            color: #dcdcaa;
+        }
         
         /* File Tree */
         .file-tree {
@@ -303,6 +322,27 @@
             background-color: #3c3c3c;
             color: #cccccc;
             border: 1px solid #3e3e42;
+        }
+
+        /* No popups - inline forms */
+        .branch-input-group input {
+            border-radius: 3px;
+        }
+
+        .branch-input-group input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        /* Commit message textarea */
+        #commitMessage {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        #commitMessage:focus {
+            outline: none;
+            border-color: #007acc;
         }
         
         /* Loading indicator */
@@ -1245,24 +1285,46 @@
             box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
         }
 
-        /* Git Panel Styling */
+        /* Git Panel - Essential positioning */
         .git-panel {
             position: fixed;
-            right: -400px;
+            right: -400px; /* Hidden by default */
             top: 0;
             width: 400px;
             height: 100%;
-            background: var(--bg-secondary);
-            border-left: 1px solid var(--border-color);
+            background: #252526;
+            border-left: 1px solid #3e3e42;
             transition: right 0.3s ease;
             z-index: 999;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
+        /* When showing */
         .git-panel.show {
-            right: 0;
+            right: 0; /* Slide in from right */
             box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Make sure close button is visible */
+        .git-panel .close-btn {
+            background: transparent;
+            border: none;
+            color: #ccc;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .git-panel .close-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .git-header {
@@ -1299,13 +1361,18 @@
             border-bottom: 2px solid var(--accent-blue);
         }
 
+        
         .git-file-item {
-            padding: 8px 15px;
             display: flex;
             align-items: center;
             gap: 10px;
-            border-bottom: 1px solid var(--border-color);
-            transition: background 0.2s ease;
+            position: relative;
+            padding-left: 5px;
+        }
+
+        .git-file-item.staged {
+            background: rgba(78, 201, 176, 0.1);
+            border-left: 3px solid #4ec9b0;
         }
 
         .git-file-item:hover {
@@ -1420,15 +1487,98 @@
             animation: pulse 1.5s infinite;
         }
 
-        /* Better Git commit history */
+        /* Diff viewer styles */
+        .diff-content {
+            max-height: 60vh;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .diff-view {
+            background: #1e1e1e;
+            border-radius: 4px;
+        }
+
+        /* Inline diff styling */
+        .line-number {
+            display: inline-block;
+            width: 40px;
+            color: #666;
+            text-align: right;
+            padding-right: 10px;
+            user-select: none;
+        }
+
+        .diff-line {
+            white-space: pre;
+            line-height: 1.4;
+        }
+
+        .diff-line.added {
+            background: rgba(87, 171, 90, 0.15);
+        }
+
+        .diff-line.removed {
+            background: rgba(229, 83, 75, 0.15);
+        }
+
+        .diff-line.unchanged {
+            color: #888;
+        }
+
+        .view-diff-btn {
+            padding: 2px 8px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .view-diff-btn:hover {
+            background: #0098ff;
+        }
+
+        .commit-details {
+            margin-top: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+        }
+
         .git-commit-item {
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
-            transition: background 0.2s;
+            cursor: pointer;
+            position: relative;
         }
 
         .git-commit-item:hover {
-            background: var(--bg-tertiary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* File name should be clickable */
+        .git-filename:hover {
+            color: #007acc;
+            text-decoration: underline;
+        }
+
+        /* Commit history styling */
+        .commit-main {
+            cursor: pointer;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .commit-main:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .commit-detail-content {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
         }
 
         .commit-header {
@@ -1480,9 +1630,20 @@
 
         .git-tab-content {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            overflow-y: auto;
+        }
+
+        /* Branch styling */
+        .branch-item {
+            transition: all 0.2s ease;
+        }
+
+        .branch-item:hover {
+            transform: translateX(2px);
+        }
+
+        .branch-item.current {
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
         }
      
     </style>
@@ -1820,15 +1981,28 @@
         </div>
     </div>
 
-    <!-- Commit Dialog -->
+    <!-- Update commit dialog to show changes -->
     <div id="commitDialog" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 600px;">
             <h3>Commit Changes</h3>
-            <textarea id="commitMessage" placeholder="Enter commit message..." style="width: 100%; height: 100px; background: #2d2d30; color: #fff; border: 1px solid #3e3e42; padding: 10px; margin: 10px 0;"></textarea>
-            <div id="stagedFilesList" style="max-height: 200px; overflow-y: auto; margin: 10px 0;"></div>
+            <textarea id="commitMessage" placeholder="Enter commit message..." style="width: 100%; height: 100px; background: #2d2d30; color: #fff; border: 1px solid #3e3e42; padding: 10px; margin: 10px 0; font-family: monospace;"></textarea>
+            <div id="stagedFilesList" style="max-height: 300px; overflow-y: auto; margin: 10px 0;"></div>
             <div class="modal-buttons">
                 <button class="primary" onclick="performCommit()">Commit</button>
                 <button class="secondary" onclick="closeCommitDialog()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this modal for viewing diffs -->
+    <div id="diffModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; max-height: 80vh;">
+            <div class="modal-header">
+                <h3 id="diffTitle">File Changes</h3>
+                <button class="close-btn" onclick="closeDiffModal()">×</button>
+            </div>
+            <div id="diffContent" class="diff-content">
+                <!-- Diff will be shown here -->
             </div>
         </div>
     </div>
@@ -1905,58 +2079,153 @@
         // Git functionality
         let gitFiles = [];
 
-        function toggleGitPanel() {
-            const panel = document.getElementById('gitPanel');
-            const isShowing = panel.classList.contains('show');
+        async function debugGit() {
+            if (!currentProject) return;
             
-            panel.classList.toggle('show');
-            
-            if (!isShowing) {
-                // Panel is opening, refresh status
-                refreshGitStatus();
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/debug`);
+                const data = await response.json();
+                console.log('Git Debug Info:', data);
+                
+                updateStatus(`Git Debug: ${data.commitCount} commits on ${data.currentBranch}`);
+            } catch (error) {
+                console.error('Debug error:', error);
             }
         }
 
-        function switchGitTab(tab, event) {
-            // Remove active class from all tabs
-            document.querySelectorAll('.git-tab').forEach(t => t.classList.remove('active'));
+        // Add a debug button temporarily
+        function addDebugButton() {
+            const gitActions = document.querySelector('.git-actions');
+            if (gitActions && !document.getElementById('debugBtn')) {
+                const debugBtn = document.createElement('button');
+                debugBtn.id = 'debugBtn';
+                debugBtn.textContent = '🐛';
+                debugBtn.onclick = debugGit;
+                debugBtn.title = 'Debug Git';
+                debugBtn.style.cssText = 'padding: 5px 10px; background: #2d2d30; border: 1px solid #3e3e42; color: #ccc; cursor: pointer; border-radius: 3px;';
+                gitActions.appendChild(debugBtn);
+            }
+        }
+
+        // Call this when Git panel opens
+        function toggleGitPanel() {
+            const panel = document.getElementById('gitPanel');
+            if (!panel) {
+                console.error('Git panel not found!');
+                return;
+            }
             
-            // Hide all tab contents
+            const isShowing = panel.classList.contains('show');
+            
+            if (isShowing) {
+                panel.classList.remove('show');
+            } else {
+                panel.classList.add('show');
+                refreshGitStatus();
+                addDebugButton(); // Add debug button
+            }
+        }
+
+        // Helper function to create panel if it's missing
+        function createGitPanelIfMissing() {
+            if (document.getElementById('gitPanel')) return;
+            
+            console.log('Creating missing Git panel...');
+            
+            const panelHTML = `
+                <div id="gitPanel" class="git-panel">
+                    <div class="git-header">
+                        <h3>Git Version Control</h3>
+                        <button class="close-btn" onclick="toggleGitPanel()">×</button>
+                    </div>
+                    
+                    <div class="git-tabs">
+                        <button class="git-tab active" onclick="switchGitTab('changes', event)">Changes</button>
+                        <button class="git-tab" onclick="switchGitTab('commits', event)">Commits</button>
+                        <button class="git-tab" onclick="switchGitTab('branches', event)">Branches</button>
+                    </div>
+                    
+                    <div id="gitChangesTab" class="git-tab-content">
+                        <div class="git-actions" style="padding: 10px; display: flex; gap: 10px; border-bottom: 1px solid #3e3e42;">
+                            <button onclick="refreshGitStatus()" title="Refresh">🔄</button>
+                            <button onclick="stageAllChanges()" title="Stage All">➕</button>
+                            <button onclick="showCommitDialog()" title="Commit">✓</button>
+                        </div>
+                        <div id="gitFileList" class="git-file-list">
+                            <!-- Changed files will appear here -->
+                        </div>
+                    </div>
+                    
+                    <div id="gitCommitsTab" class="git-tab-content" style="display: none;">
+                        <div id="gitCommitList" class="git-commit-list">
+                            <!-- Commit history will appear here -->
+                        </div>
+                    </div>
+                    
+                    <div id="gitBranchesTab" class="git-tab-content" style="display: none;">
+                        <div id="gitBranchList">
+                            <!-- Branches will appear here -->
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', panelHTML);
+            console.log('Git panel created');
+        }
+
+        // Update the Git panel switch to load branches
+        function switchGitTab(tab, event) {
+            document.querySelectorAll('.git-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.git-tab-content').forEach(c => c.style.display = 'none');
             
-            // Add active class to clicked tab
             if (event && event.target) {
                 event.target.classList.add('active');
             }
             
-            // Show the selected tab content
             const tabContent = document.getElementById(`git${tab.charAt(0).toUpperCase() + tab.slice(1)}Tab`);
             if (tabContent) {
                 tabContent.style.display = 'block';
             }
             
-            // Load data for specific tabs
             if (tab === 'commits') {
                 loadGitHistory();
             } else if (tab === 'changes') {
                 refreshGitStatus();
+            } else if (tab === 'branches') {
+                loadBranches();
             }
         }
 
         async function initGitRepo() {
-            if (!currentProject) return;
+            if (!currentProject) {
+                console.error('No current project');
+                return;
+            }
+            
+            console.log('Initializing Git repository...');
             
             try {
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/init`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 });
+                
+                const data = await response.json();
                 
                 if (response.ok) {
                     updateStatus('Git repository initialized');
-                    refreshGitStatus();
+                    // Wait a moment for the backend to complete initialization
+                    setTimeout(() => {
+                        refreshGitStatus();
+                    }, 500);
+                } else {
+                    console.error('Git init failed:', data);
+                    updateStatus('Failed to initialize Git repository', true);
                 }
             } catch (error) {
                 console.error('Git init error:', error);
+                updateStatus('Error initializing Git repository', true);
             }
         }
 
@@ -1972,25 +2241,373 @@
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/status`);
                 const data = await response.json();
                 
-                console.log('Git status response:', data);
+                console.log('Git status response:', response.status, data);
                 
                 if (response.ok) {
                     gitFiles = data.files || [];
                     displayGitFiles();
+                } else if (response.status === 404) {
+                    // No git repo found
+                    document.getElementById('gitFileList').innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <p style="color: #888; margin-bottom: 10px;">No Git repository found</p>
+                            <button onclick="initGitRepo()" style="padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 3px; cursor: pointer;">Initialize Git</button>
+                        </div>
+                    `;
                 } else {
-                    throw new Error(data.error || 'Failed to get status');
+                    throw new Error(data.error || 'Failed to get git status');
                 }
             } catch (error) {
                 console.error('Git status error:', error);
-                // Show init button if no repo
                 document.getElementById('gitFileList').innerHTML = `
                     <div style="text-align: center; padding: 20px;">
-                        <p>No Git repository found</p>
-                        <button onclick="initGitRepo()" style="margin-top: 10px; padding: 5px 15px; background: #007acc; color: white; border: none; border-radius: 3px; cursor: pointer;">Initialize Git</button>
+                        <p style="color: #f48771;">Error loading Git status</p>
+                        <button onclick="refreshGitStatus()" style="margin-top: 10px; padding: 5px 15px; background: #3e3e42; color: white; border: none; border-radius: 3px; cursor: pointer;">Retry</button>
                     </div>
                 `;
             }
         }
+
+        // View file diff
+        async function viewFileDiff(filepath) {
+            if (!currentProject) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/diff/${encodeURIComponent(filepath)}`);
+                const data = await response.json();
+                
+                document.getElementById('diffTitle').textContent = `Changes in ${filepath}`;
+                document.getElementById('diffContent').innerHTML = createDiffView(data);
+                document.getElementById('diffModal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading diff:', error);
+            }
+        }
+
+        function createDiffView(diffData) {
+            if (!diffData.hasChanges) {
+                return '<div style="padding: 20px; text-align: center; color: #888;">No changes in this file</div>';
+            }
+            
+            const oldLines = diffData.committedContent.split('\n');
+            const newLines = diffData.currentContent.split('\n');
+            
+            let html = '<div class="diff-view">';
+            
+            // Simple diff display - you can make this more sophisticated
+            const maxLines = Math.max(oldLines.length, newLines.length);
+            
+            for (let i = 0; i < maxLines; i++) {
+                const oldLine = oldLines[i] || '';
+                const newLine = newLines[i] || '';
+                
+                if (oldLine !== newLine) {
+                    if (oldLine && !newLine) {
+                        html += `<div class="diff-line removed">- ${escapeHtml(oldLine)}</div>`;
+                    } else if (!oldLine && newLine) {
+                        html += `<div class="diff-line added">+ ${escapeHtml(newLine)}</div>`;
+                    } else {
+                        html += `<div class="diff-line removed">- ${escapeHtml(oldLine)}</div>`;
+                        html += `<div class="diff-line added">+ ${escapeHtml(newLine)}</div>`;
+                    }
+                } else {
+                    html += `<div class="diff-line unchanged">  ${escapeHtml(oldLine)}</div>`;
+                }
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        function closeDiffModal() {
+            document.getElementById('diffModal').style.display = 'none';
+        }
+
+        // Update displayGitFiles to add click handler for diffs
+        function displayGitFiles() {
+            const fileList = document.getElementById('gitFileList');
+            
+            if (gitFiles.length === 0) {
+                fileList.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">No changes</div>';
+                return;
+            }
+            
+            // Group files by staged/unstaged
+            const stagedFiles = gitFiles.filter(f => f.staged);
+            const unstagedFiles = gitFiles.filter(f => !f.staged);
+            
+            let html = '';
+            
+            if (unstagedFiles.length > 0) {
+                html += '<div style="padding: 10px; color: #888; font-size: 12px;">Changes not staged for commit:</div>';
+                html += unstagedFiles.map(file => createFileItem(file)).join('');
+            }
+            
+            if (stagedFiles.length > 0) {
+                html += '<div style="padding: 10px; color: #4ec9b0; font-size: 12px; margin-top: 10px;">Changes to be committed:</div>';
+                html += stagedFiles.map(file => createFileItem(file)).join('');
+            }
+            
+            fileList.innerHTML = html;
+        }
+
+        function createFileItem(file) {
+            const statusSymbol = {
+                '??': '✨',
+                'M': '📝',
+                'A': '➕',
+                'D': '➖'
+            }[file.status] || file.status;
+            
+            return `
+                <div class="git-file-item ${file.staged ? 'staged' : ''}">
+                    <input type="checkbox" ${file.staged ? 'checked' : ''} 
+                        onchange="toggleFileStaging('${file.path}', this.checked)">
+                    <span class="git-status">${statusSymbol}</span>
+                    <span class="git-filename" onclick="viewFileDiff('${file.path}')" style="cursor: pointer; flex: 1;">
+                        ${file.path}
+                    </span>
+                    ${file.status === 'M' ? '<button onclick="viewFileDiff(\'' + file.path + '\')" class="view-diff-btn">Diff</button>' : ''}
+                </div>
+            `;
+        }    
+
+        async function toggleCommitDetails(commitHash, index) {
+            const detailsDiv = document.getElementById(`commit-details-${index}`);
+            
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+                detailsDiv.innerHTML = '<div style="padding: 10px;">Loading commit details...</div>';
+                
+                try {
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/commits/${commitHash}/details`);
+                    const details = await response.json();
+                    
+                    let detailsHtml = '<div class="commit-detail-content">';
+                    
+                    // Show file changes summary
+                    detailsHtml += '<div class="commit-stats" style="padding: 10px; background: #2d2d30; margin-bottom: 10px; border-radius: 4px;">';
+                    const totalAdditions = details.fileChanges.reduce((sum, f) => sum + f.additions, 0);
+                    const totalDeletions = details.fileChanges.reduce((sum, f) => sum + f.deletions, 0);
+                    detailsHtml += `<span style="color: #4ec9b0;">+${totalAdditions}</span> <span style="color: #f48771;">-${totalDeletions}</span> in ${details.fileChanges.length} files`;
+                    detailsHtml += '</div>';
+                    
+                    // Show each file's changes
+                    for (const change of details.fileChanges) {
+                        detailsHtml += `
+                            <div class="file-change-item" style="margin-bottom: 15px;">
+                                <div class="file-change-header" style="padding: 5px 10px; background: #2d2d30; cursor: pointer;" 
+                                    onclick="toggleFileDiff('${commitHash}', '${change.filepath}', ${index})">
+                                    <span class="file-status ${change.status}">${change.status === 'added' ? '➕' : '📝'}</span>
+                                    <span>${change.filepath}</span>
+                                    <span style="float: right;">
+                                        <span style="color: #4ec9b0;">+${change.additions}</span>
+                                        <span style="color: #f48771;">-${change.deletions}</span>
+                                    </span>
+                                </div>
+                                <div id="diff-${commitHash}-${change.filepath.replace(/[/.]/g, '-')}" class="file-diff" style="display: none;">
+                                    <!-- Diff will be shown here -->
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    detailsHtml += '</div>';
+                    detailsDiv.innerHTML = detailsHtml;
+                    
+                } catch (error) {
+                    console.error('Error loading commit details:', error);
+                    detailsDiv.innerHTML = '<div style="padding: 10px; color: #f48771;">Error loading details</div>';
+                }
+            } else {
+                detailsDiv.style.display = 'none';
+            }
+        }
+
+        async function toggleFileDiff(commitHash, filepath, commitIndex) {
+            const diffId = `diff-${commitHash}-${filepath.replace(/[/.]/g, '-')}`;
+            const diffDiv = document.getElementById(diffId);
+            
+            if (diffDiv.style.display === 'none') {
+                diffDiv.style.display = 'block';
+                
+                // Load the actual diff
+                try {
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/commits/${commitHash}/details`);
+                    const details = await response.json();
+                    
+                    const fileChange = details.fileChanges.find(f => f.filepath === filepath);
+                    if (fileChange) {
+                        diffDiv.innerHTML = createInlineDiff(fileChange);
+                    }
+                } catch (error) {
+                    diffDiv.innerHTML = '<div style="padding: 10px; color: #f48771;">Error loading diff</div>';
+                }
+            } else {
+                diffDiv.style.display = 'none';
+            }
+        }
+
+        function createInlineDiff(fileChange) {
+            const oldLines = fileChange.previousContent.split('\n');
+            const newLines = fileChange.currentContent.split('\n');
+            
+            let html = '<div class="inline-diff" style="background: #1e1e1e; padding: 10px; font-family: monospace; font-size: 12px; overflow-x: auto;">';
+            
+            // Simple diff algorithm
+            const maxLines = Math.max(oldLines.length, newLines.length);
+            let lineNumber = 1;
+            
+            for (let i = 0; i < maxLines; i++) {
+                const oldLine = oldLines[i];
+                const newLine = newLines[i];
+                
+                if (oldLine === newLine) {
+                    html += `<div class="diff-line unchanged"><span class="line-number">${lineNumber}</span> ${escapeHtml(oldLine || '')}</div>`;
+                    lineNumber++;
+                } else {
+                    if (oldLine !== undefined && newLine === undefined) {
+                        html += `<div class="diff-line removed"><span class="line-number">-</span>- ${escapeHtml(oldLine)}</div>`;
+                    } else if (oldLine === undefined && newLine !== undefined) {
+                        html += `<div class="diff-line added"><span class="line-number">${lineNumber}</span>+ ${escapeHtml(newLine)}</div>`;
+                        lineNumber++;
+                    } else {
+                        html += `<div class="diff-line removed"><span class="line-number">-</span>- ${escapeHtml(oldLine)}</div>`;
+                        html += `<div class="diff-line added"><span class="line-number">${lineNumber}</span>+ ${escapeHtml(newLine)}</div>`;
+                        lineNumber++;
+                    }
+                }
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        async function getCurrentBranch() {
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/branches`);
+                const data = await response.json();
+                return data.currentBranch || 'main';
+            } catch (error) {
+                return 'main';
+            }
+        }
+
+
+
+
+        // Branch Management
+        async function loadBranches() {
+            if (!currentProject) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/branches`);
+                const data = await response.json();
+                
+                const branchList = document.getElementById('gitBranchList');
+                branchList.innerHTML = `
+                    <div class="branch-input-group" style="padding: 10px; border-bottom: 1px solid #3e3e42;">
+                        <input type="text" id="newBranchName" placeholder="New branch name..." 
+                            style="background: #2d2d30; border: 1px solid #3e3e42; color: #ccc; padding: 5px; width: 200px;"
+                            onkeypress="if(event.key==='Enter') createBranch()">
+                        <button onclick="createBranch()" style="padding: 5px 10px; background: #007acc; color: white; border: none; cursor: pointer; margin-left: 5px;">Create</button>
+                    </div>
+                    <div class="branch-list" style="padding: 10px;">
+                        ${data.branches.map(branch => `
+                            <div class="branch-item ${branch.current ? 'current' : ''}" style="padding: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 5px; ${branch.current ? 'background: #007acc;' : 'background: #2d2d30;'}">
+                                <div>
+                                    <span style="font-weight: bold;">${branch.name}</span>
+                                    ${branch.current ? '<span style="margin-left: 10px; font-size: 12px;">(current)</span>' : ''}
+                                    <div style="font-size: 12px; color: #888; margin-top: 2px;">${branch.commitCount || 0} commits</div>
+                                </div>
+                                <div>
+                                    ${!branch.current ? `<button onclick="checkoutBranch('${branch.name}')" style="padding: 4px 8px; background: #3e3e42; color: white; border: none; cursor: pointer; border-radius: 3px; margin-right: 5px;">Checkout</button>` : ''}
+                                    ${!branch.current && branch.name !== 'main' ? `<button onclick="mergeBranch('${branch.name}')" style="padding: 4px 8px; background: #4ec9b0; color: white; border: none; cursor: pointer; border-radius: 3px;">Merge</button>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Load branches error:', error);
+            }
+        }
+
+        async function createBranch() {
+            const branchNameInput = document.getElementById('newBranchName');
+            const branchName = branchNameInput.value.trim();
+            
+            if (!branchName) {
+                branchNameInput.style.borderColor = '#f48771';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/branches`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ branchName })
+                });
+                
+                if (response.ok) {
+                    branchNameInput.value = '';
+                    await loadBranches();
+                    updateStatus(`Created branch: ${branchName}`);
+                }
+            } catch (error) {
+                console.error('Create branch error:', error);
+                updateStatus('Failed to create branch', true);
+            }
+        }
+
+        async function checkoutBranch(branchName) {
+            if (!currentProject) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/checkout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ branchName })
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Switched to branch: ${branchName}`);
+                    await loadBranches();
+                    await refreshGitStatus();
+                    
+                    // Reload files if any are open
+                    if (currentFile) {
+                        await openFile(currentFile);
+                    }
+                }
+            } catch (error) {
+                console.error('Checkout error:', error);
+                updateStatus('Failed to switch branch', true);
+            }
+        }
+
+        async function mergeBranch(sourceBranch) {
+            if (!currentProject) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/merge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sourceBranch })
+                });
+                
+                if (response.ok) {
+                    updateStatus(`Merged ${sourceBranch} into current branch`);
+                    await refreshGitStatus();
+                    await loadGitHistory();
+                }
+            } catch (error) {
+                console.error('Merge error:', error);
+                updateStatus('Merge failed', true);
+            }
+        }
+
+
 
         function displayGitFiles() {
             const fileList = document.getElementById('gitFileList');
@@ -2009,11 +2626,12 @@
                 }[file.status] || file.status;
                 
                 return `
-                    <div class="git-file-item">
+                    <div class="git-file-item ${file.staged ? 'staged' : ''}">
                         <input type="checkbox" ${file.staged ? 'checked' : ''} 
                             onchange="toggleFileStaging('${file.path}', this.checked)">
-                        <span class="git-status ${file.staged ? 'staged' : ''}">${statusSymbol}</span>
+                        <span class="git-status">${statusSymbol}</span>
                         <span class="git-filename">${file.path}</span>
+                        ${file.staged ? '<span style="color: #4ec9b0; margin-left: auto;">staged</span>' : ''}
                     </div>
                 `;
             }).join('');
@@ -2023,64 +2641,143 @@
             if (!currentProject) return;
             
             try {
-                const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/add`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ files: [filepath] })
-                });
+                console.log('Toggle staging:', filepath, shouldStage);
                 
-                if (response.ok) {
-                    refreshGitStatus();
+                if (shouldStage) {
+                    // Stage the file
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/add`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: [filepath] })
+                    });
+                    
+                    if (response.ok) {
+                        const fileIndex = gitFiles.findIndex(f => f.path === filepath);
+                        if (fileIndex >= 0) {
+                            gitFiles[fileIndex].staged = true;
+                            displayGitFiles();
+                        }
+                    }
+                } else {
+                    // Unstage the file
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/unstage`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: [filepath] })
+                    });
+                    
+                    if (response.ok) {
+                        const fileIndex = gitFiles.findIndex(f => f.path === filepath);
+                        if (fileIndex >= 0) {
+                            gitFiles[fileIndex].staged = false;
+                            displayGitFiles();
+                        }
+                    }
                 }
             } catch (error) {
-                console.error('Git add error:', error);
+                console.error('Git staging error:', error);
             }
         }
 
         async function stageAllChanges() {
-            if (!currentProject) return;
+            if (!currentProject) {
+                console.log('No current project');
+                return;
+            }
+            
+            // First refresh to get latest file status
+            await refreshGitStatus();
+            
+            if (!gitFiles || gitFiles.length === 0) {
+                updateStatus('No files to stage');
+                return;
+            }
+            
+            console.log('Staging all files...');
             
             try {
+                // Get only unstaged files
+                const filesToStage = gitFiles.filter(f => !f.staged).map(f => f.path);
+                
+                if (filesToStage.length === 0) {
+                    updateStatus('All files already staged');
+                    return;
+                }
+                
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/add`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ files: ['.'] })
+                    body: JSON.stringify({ files: filesToStage })
                 });
                 
                 if (response.ok) {
-                    refreshGitStatus();
+                    updateStatus(`Staged ${filesToStage.length} files`);
+                    await refreshGitStatus();
+                } else {
+                    const error = await response.json();
+                    console.error('Stage all failed:', error);
+                    updateStatus('Failed to stage files', true);
                 }
             } catch (error) {
                 console.error('Git add all error:', error);
+                updateStatus('Error staging files', true);
             }
         }
 
         function showCommitDialog() {
             const stagedFiles = gitFiles.filter(f => f.staged);
+            console.log('Showing commit dialog. Staged files:', stagedFiles);
+            
             if (stagedFiles.length === 0) {
-                alert('No files staged for commit');
+                updateStatus('No files staged for commit. Stage some files first!', true);
                 return;
             }
             
-            document.getElementById('stagedFilesList').innerHTML = 
-                '<h4>Files to commit:</h4>' + 
-                stagedFiles.map(f => `<div>• ${f.path}</div>`).join('');
+            // Show detailed file list
+            const filesList = document.getElementById('stagedFilesList');
+            filesList.innerHTML = `
+                <h4 style="margin: 0 0 10px 0; color: #ccc;">Files to commit (${stagedFiles.length}):</h4>
+                <div style="max-height: 200px; overflow-y: auto; background: #1e1e1e; padding: 10px; border-radius: 4px;">
+                    ${stagedFiles.map(f => {
+                        const icon = f.status === '??' ? '✨' : '📝';
+                        return `<div style="color: #4ec9b0; margin: 2px 0;">${icon} ${f.path}</div>`;
+                    }).join('')}
+                </div>
+            `;
             
             document.getElementById('commitDialog').style.display = 'block';
-            document.getElementById('commitMessage').focus();
+            const messageInput = document.getElementById('commitMessage');
+            messageInput.focus();
+            messageInput.style.borderColor = '#3e3e42';
+            messageInput.placeholder = 'Enter commit message...';
         }
 
         function closeCommitDialog() {
             document.getElementById('commitDialog').style.display = 'none';
             document.getElementById('commitMessage').value = '';
+            
+            // Reset button state
+            const commitBtn = document.querySelector('.modal-buttons .primary');
+            if (commitBtn) {
+                commitBtn.disabled = false;
+                commitBtn.textContent = 'Commit';
+            }
         }
 
+        // Enhanced commit functionality
         async function performCommit() {
-            const message = document.getElementById('commitMessage').value.trim();
+            const messageInput = document.getElementById('commitMessage');
+            const message = messageInput.value.trim();
+            
             if (!message) {
-                alert('Please enter a commit message');
+                messageInput.style.borderColor = '#f48771';
+                messageInput.placeholder = 'Commit message is required!';
                 return;
             }
+            
+            const commitBtn = document.querySelector('.modal-buttons .primary');
+            commitBtn.disabled = true;
+            commitBtn.textContent = 'Committing...';
             
             try {
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/commit`, {
@@ -2089,41 +2786,85 @@
                     body: JSON.stringify({ message })
                 });
                 
+                const result = await response.json();
+                
                 if (response.ok) {
+                    console.log('Commit successful:', result);
+                    
                     closeCommitDialog();
-                    updateStatus('Changes committed');
-                    refreshGitStatus();
+                    updateStatus(result.message || `Committed successfully`);
+                    
+                    // Refresh git status
+                    await refreshGitStatus();
+                    
+                    // Force refresh commits tab
+                    setTimeout(async () => {
+                        await loadGitHistory();
+                        // Switch to commits tab
+                        document.querySelector('.git-tab:nth-child(2)').click();
+                    }, 500);
+                } else {
+                    console.error('Commit failed:', result);
+                    alert(result.error || 'Commit failed');
+                    commitBtn.disabled = false;
+                    commitBtn.textContent = 'Commit';
                 }
             } catch (error) {
                 console.error('Git commit error:', error);
+                alert('Error committing changes: ' + error.message);
+                commitBtn.disabled = false;
+                commitBtn.textContent = 'Commit';
             }
         }
 
-        // Update the commit history display
+        // Enhanced Commit History with Full Details
         async function loadGitHistory() {
             if (!currentProject) return;
+            
+            console.log('Loading git history...');
             
             try {
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/log`);
                 const data = await response.json();
                 
+                console.log('Git log response:', data);
+                
                 const commitList = document.getElementById('gitCommitList');
+                
+                // Show branch info
+                let html = `
+                    <div style="padding: 10px; border-bottom: 1px solid #3e3e42; color: #888;">
+                        Branch: <span style="color: #4ec9b0; font-weight: bold;">${data.branch || 'main'}</span>
+                    </div>
+                `;
+                
                 if (data.commits && data.commits.length > 0) {
-                    commitList.innerHTML = data.commits.map(commit => `
-                        <div class="git-commit-item">
-                            <div class="commit-header">
-                                <span class="commit-hash">${commit.hash}</span>
-                                <span class="commit-author">${commit.author}</span>
+                    html += data.commits.map((commit, index) => `
+                        <div class="git-commit-item" onclick="toggleCommitDetails('${commit.fullHash || commit.hash}', ${index})">
+                            <div class="commit-main">
+                                <div class="commit-header">
+                                    <span class="commit-hash" style="font-family: monospace; color: #007acc;">${commit.hash}</span>
+                                    <span class="commit-author" style="color: #969696;">${commit.author}</span>
+                                </div>
+                                <div class="commit-message" style="margin: 5px 0; color: #cccccc;">${commit.message}</div>
+                                <div class="commit-time" style="font-size: 12px; color: #969696;">
+                                    ${new Date(commit.timestamp).toLocaleString()}
+                                </div>
                             </div>
-                            <div class="commit-message">${commit.message}</div>
-                            <div class="commit-time">${new Date(commit.timestamp).toLocaleString()}</div>
+                            <div id="commit-details-${index}" class="commit-details" style="display: none;">
+                                <!-- Details will be loaded here when clicked -->
+                            </div>
                         </div>
                     `).join('');
                 } else {
-                    commitList.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">No commits yet</div>';
+                    html += '<div style="text-align: center; padding: 40px; color: #888;">No commits yet</div>';
                 }
+                
+                commitList.innerHTML = html;
             } catch (error) {
                 console.error('Git log error:', error);
+                document.getElementById('gitCommitList').innerHTML = 
+                    '<div style="text-align: center; padding: 20px; color: #f48771;">Error loading commits</div>';
             }
         }
 
@@ -2176,13 +2917,19 @@
             addGitButton();
         }
 
-        // ADD THIS NEW FUNCTION RIGHT AFTER initializeApp
+       // In your addGitButton function, verify the click handlers:
         function addGitButton() {
             const statusBar = document.querySelector('.status-bar');
+            
+            // Status bar button
             const gitButton = document.createElement('button');
             gitButton.className = 'git-status-button';
             gitButton.innerHTML = '🌿 Git';
-            gitButton.onclick = toggleGitPanel;
+            gitButton.onclick = function(e) {
+                e.preventDefault();
+                console.log('Git button clicked');
+                toggleGitPanel();
+            };
             
             // Find a good place to insert it
             const shareButton = statusBar.querySelector('.share-button');
@@ -2192,13 +2939,19 @@
                 statusBar.appendChild(gitButton);
             }
             
-            // Also add floating action button
+            // Floating action button
             const fab = document.createElement('button');
             fab.className = 'git-fab';
             fab.innerHTML = '🌿';
-            fab.onclick = toggleGitPanel;
+            fab.onclick = function(e) {
+                e.preventDefault();
+                console.log('Git FAB clicked');
+                toggleGitPanel();
+            };
             fab.title = 'Git Version Control';
             document.body.appendChild(fab);
+            
+            console.log('Git buttons added');
         }
 
         // Add find/replace support

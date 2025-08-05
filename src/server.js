@@ -550,27 +550,29 @@ app.get('/api/projects/:projectId/search', async (req, res) => {
     }
 });
 
-// Git endpoints
-// Add these Git endpoints that work with Redis
 app.post('/api/projects/:projectId/git/init', async (req, res) => {
     try {
         const { projectId } = req.params;
         
         // Initialize git metadata in Redis
-        await redisClient.hSet(`project:${projectId}:git`, {
-            initialized: 'true',
-            currentBranch: 'main',
-            createdAt: new Date().toISOString()
-        });
+        await redisClient.hSet(`project:${projectId}:git`, 'initialized', 'true');
+        await redisClient.hSet(`project:${projectId}:git`, 'currentBranch', 'main');
+        await redisClient.hSet(`project:${projectId}:git`, 'createdAt', new Date().toISOString());
+        
+        // Initialize empty branches object with main branch
+        await redisClient.hSet(`project:${projectId}:branches`, 'main', '');
         
         // Create initial commit
-        const commitId = `commit:${Date.now()}`;
-        await redisClient.hSet(commitId, {
-            message: 'Initial commit',
-            author: 'System',
-            timestamp: new Date().toISOString(),
-            projectId: projectId
-        });
+        const commitId = `commit:${projectId}:${Date.now()}`;
+        await redisClient.hSet(commitId, 'message', 'Initial commit');
+        await redisClient.hSet(commitId, 'author', 'System');
+        await redisClient.hSet(commitId, 'timestamp', new Date().toISOString());
+        await redisClient.hSet(commitId, 'projectId', projectId);
+        await redisClient.hSet(commitId, 'branch', 'main');
+        await redisClient.hSet(commitId, 'files', '[]');
+        
+        // Add to commit list
+        await redisClient.lPush(`project:${projectId}:branch:main:commits`, commitId);
         
         res.json({ success: true, message: 'Git repository initialized' });
     } catch (error) {
@@ -589,22 +591,31 @@ app.get('/api/projects/:projectId/git/status', async (req, res) => {
             return res.status(404).json({ error: 'No git repository' });
         }
         
+        // Get staged files - handle null case
+        const stagedFilesData = await redisClient.hGetAll(`project:${projectId}:git:staged`);
+        const stagedFiles = stagedFilesData || {};
+        console.log('Staged files from Redis:', stagedFiles);
+        
         // Get tracked files and their status
         const files = await projectManager.listProjectFiles(projectId);
-        const trackedFiles = await redisClient.hGetAll(`project:${projectId}:git:tracked`);
+        const trackedFilesData = await redisClient.hGetAll(`project:${projectId}:git:tracked`);
+        const trackedFiles = trackedFilesData || {};
         
         const gitFiles = [];
         
         for (const file of files) {
-            const currentContent = await redisClient.hGet(`project:${projectId}:file:${file.filepath}`, 'content');
+            const currentContent = await redisClient.hGet(`project:${projectId}:file:${file.filepath}`, 'content') || '';
             const lastCommitContent = trackedFiles[file.filepath];
+            
+            // Check if file is staged - safe check
+            const isStaged = stagedFiles && typeof stagedFiles === 'object' && file.filepath in stagedFiles;
             
             if (!lastCommitContent) {
                 // New file
                 gitFiles.push({
                     status: '??',
                     path: file.filepath,
-                    staged: false,
+                    staged: isStaged,
                     modified: false
                 });
             } else if (currentContent !== lastCommitContent) {
@@ -612,7 +623,7 @@ app.get('/api/projects/:projectId/git/status', async (req, res) => {
                 gitFiles.push({
                     status: 'M',
                     path: file.filepath,
-                    staged: false,
+                    staged: isStaged,
                     modified: true
                 });
             }
@@ -630,9 +641,12 @@ app.post('/api/projects/:projectId/git/add', async (req, res) => {
         const { projectId } = req.params;
         const { files } = req.body;
         
-        // Mark files as staged in Redis
+        console.log('Staging files:', files);
+        
+        // Stage each file individually with proper string value
         for (const file of files) {
-            await redisClient.hSet(`project:${projectId}:git:staged`, file, 'true');
+            // Set value as 'staged' string, not boolean
+            await redisClient.hSet(`project:${projectId}:git:staged`, file, 'staged');
         }
         
         res.json({ success: true });
@@ -642,49 +656,359 @@ app.post('/api/projects/:projectId/git/add', async (req, res) => {
     }
 });
 
+app.delete('/api/projects/:projectId/git/unstage', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { files } = req.body;
+        
+        // Unstage specific files
+        for (const file of files) {
+            await redisClient.hDel(`project:${projectId}:git:staged`, file);
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Git unstage error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add this endpoint to get file changes
+app.get('/api/projects/:projectId/git/diff/:filepath', async (req, res) => {
+    try {
+        const { projectId, filepath } = req.params;
+        const decodedPath = decodeURIComponent(filepath);
+        
+        // Get current content
+        const currentContent = await redisClient.hGet(`project:${projectId}:file:${decodedPath}`, 'content') || '';
+        
+        // Get last committed content
+        const committedContent = await redisClient.hGet(`project:${projectId}:git:tracked`, decodedPath) || '';
+        
+        // Create a simple diff
+        const currentLines = currentContent.split('\n');
+        const committedLines = committedContent.split('\n');
+        
+        res.json({
+            filepath: decodedPath,
+            currentContent,
+            committedContent,
+            hasChanges: currentContent !== committedContent,
+            additions: currentLines.length - committedLines.length,
+            deletions: 0 // You could implement a proper diff algorithm
+        });
+    } catch (error) {
+        console.error('Git diff error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get commit details
+app.get('/api/projects/:projectId/git/commits/:commitId', async (req, res) => {
+    try {
+        const { projectId, commitId } = req.params;
+        const commitData = await redisClient.hGetAll(commitId);
+        
+        if (!commitData.message) {
+            return res.status(404).json({ error: 'Commit not found' });
+        }
+        
+        // Get file snapshots for this commit
+        const files = JSON.parse(commitData.files || '[]');
+        const fileContents = {};
+        
+        for (const file of files) {
+            const content = await redisClient.hGet(`${commitId}:files`, file) || '';
+            fileContents[file] = content;
+        }
+        
+        res.json({
+            ...commitData,
+            fileContents
+        });
+    } catch (error) {
+        console.error('Get commit error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Complete Git Branch System
+app.get('/api/projects/:projectId/git/branches', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        // Get all branches
+        const branches = await redisClient.hGetAll(`project:${projectId}:branches`) || {};
+        const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        
+        // Get commit count for each branch
+        const branchList = [];
+        for (const [name, headCommit] of Object.entries(branches)) {
+            const commitCount = await redisClient.lLen(`project:${projectId}:branch:${name}:commits`);
+            branchList.push({
+                name,
+                current: name === currentBranch,
+                headCommit,
+                commitCount
+            });
+        }
+        
+        // Ensure main branch exists
+        if (!branches.main) {
+            branchList.push({
+                name: 'main',
+                current: currentBranch === 'main',
+                headCommit: null,
+                commitCount: 0
+            });
+        }
+        
+        res.json({ branches: branchList, currentBranch });
+    } catch (error) {
+        console.error('Git branches error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/projects/:projectId/git/branches', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { branchName, fromBranch } = req.body;
+        
+        // Get current branch's HEAD commit
+        const sourceBranch = fromBranch || await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        const commits = await redisClient.lRange(`project:${projectId}:branch:${sourceBranch}:commits`, 0, 0);
+        const headCommit = commits[0] || null;
+        
+        // Create new branch
+        await redisClient.hSet(`project:${projectId}:branches`, branchName, headCommit || '');
+        
+        // Copy commit history
+        if (headCommit) {
+            const allCommits = await redisClient.lRange(`project:${projectId}:branch:${sourceBranch}:commits`, 0, -1);
+            if (allCommits.length > 0) {
+                await redisClient.rPush(`project:${projectId}:branch:${branchName}:commits`, ...allCommits.reverse());
+            }
+        }
+        
+        res.json({ success: true, branch: branchName });
+    } catch (error) {
+        console.error('Create branch error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/projects/:projectId/git/checkout', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { branchName } = req.body;
+        
+        // Check if branch exists
+        const branches = await redisClient.hGetAll(`project:${projectId}:branches`);
+        if (!branches[branchName] && branchName !== 'main') {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
+        
+        // Save current branch state before switching
+        const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        
+        // Switch branch
+        await redisClient.hSet(`project:${projectId}:git`, 'currentBranch', branchName);
+        
+        // Load branch's file state
+        const headCommit = branches[branchName];
+        if (headCommit) {
+            // Restore files from this branch's HEAD commit
+            const commitFiles = await redisClient.hGetAll(`${headCommit}:files`);
+            for (const [filepath, content] of Object.entries(commitFiles)) {
+                await redisClient.hSet(`project:${projectId}:file:${filepath}`, 'content', content);
+            }
+        }
+        
+        res.json({ success: true, branch: branchName, previousBranch: currentBranch });
+    } catch (error) {
+        console.error('Checkout error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Enhanced commit with branch support
 app.post('/api/projects/:projectId/git/commit', async (req, res) => {
     try {
         const { projectId } = req.params;
         const { message } = req.body;
         
-        // Get staged files
-        const stagedFiles = await redisClient.hGetAll(`project:${projectId}:git:staged`);
+        const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        const stagedFiles = await redisClient.hGetAll(`project:${projectId}:git:staged`) || {};
         const filesToCommit = Object.keys(stagedFiles);
         
         if (filesToCommit.length === 0) {
             return res.status(400).json({ error: 'No files staged for commit' });
         }
         
-        // Create commit object
+        // Create commit ID
         const commitId = `commit:${projectId}:${Date.now()}`;
-        const commitData = {
-            message: message,
-            author: 'User', // You could get this from session
-            timestamp: new Date().toISOString(),
-            projectId: projectId,
-            files: JSON.stringify(filesToCommit)
-        };
         
-        await redisClient.hSet(commitId, commitData);
+        // Get parent commit
+        const parentCommits = await redisClient.lRange(`project:${projectId}:branch:${currentBranch}:commits`, 0, 0);
+        const parentCommit = parentCommits[0] || null;
         
-        // Update tracked files with current content
+        // Create commit data - set each field individually
+        await redisClient.hSet(commitId, 'id', commitId);
+        await redisClient.hSet(commitId, 'message', message);
+        await redisClient.hSet(commitId, 'author', 'User');
+        await redisClient.hSet(commitId, 'timestamp', new Date().toISOString());
+        await redisClient.hSet(commitId, 'branch', currentBranch);
+        await redisClient.hSet(commitId, 'parent', parentCommit || '');
+        await redisClient.hSet(commitId, 'files', JSON.stringify(filesToCommit));
+        
+        // Save file snapshots and calculate changes
+        const changes = [];
         for (const filepath of filesToCommit) {
-            const content = await redisClient.hGet(`project:${projectId}:file:${filepath}`, 'content');
-            await redisClient.hSet(`project:${projectId}:git:tracked`, filepath, content || '');
+            const content = await redisClient.hGet(`project:${projectId}:file:${filepath}`, 'content') || '';
+            
+            // Get previous content
+            let previousContent = '';
+            if (parentCommit) {
+                previousContent = await redisClient.hGet(`${parentCommit}:files`, filepath) || '';
+            }
+            
+            // Save current snapshot
+            await redisClient.hSet(`${commitId}:files`, filepath, content);
+            
+            // Calculate simple diff stats
+            const currentLines = content.split('\n').length;
+            const previousLines = previousContent.split('\n').length;
+            const added = Math.max(0, currentLines - previousLines);
+            const deleted = Math.max(0, previousLines - currentLines);
+            
+            changes.push({
+                file: filepath,
+                additions: added,
+                deletions: deleted
+            });
+            
+            // Update tracked files
+            await redisClient.hSet(`project:${projectId}:git:tracked`, filepath, content);
         }
         
-        // Clear staged files
+        // Save changes summary
+        await redisClient.hSet(`${commitId}:changes`, 'summary', JSON.stringify(changes));
+        
+        // Clear staged files - delete the entire hash
         await redisClient.del(`project:${projectId}:git:staged`);
         
-        // Add commit to project's commit list
-        await redisClient.lPush(`project:${projectId}:commits`, commitId);
+        // Add to branch's commit list
+        await redisClient.lPush(`project:${projectId}:branch:${currentBranch}:commits`, commitId);
+        
+        // Update branch HEAD
+        await redisClient.hSet(`project:${projectId}:branches`, currentBranch, commitId);
         
         res.json({ 
-            success: true, 
-            output: `[main ${commitId.split(':').pop()}] ${message}\n ${filesToCommit.length} files changed` 
+            success: true,
+            commitId: commitId,
+            branch: currentBranch,
+            changes: changes,
+            message: `[${currentBranch} ${commitId.split(':').pop().substring(0, 7)}] ${message}`
         });
     } catch (error) {
         console.error('Git commit error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get detailed commit info
+app.get('/api/projects/:projectId/git/commits/:commitId/details', async (req, res) => {
+    try {
+        const { projectId, commitId } = req.params;
+        const fullCommitId = commitId.includes(':') ? commitId : `commit:${projectId}:${commitId}`;
+        
+        const commitData = await redisClient.hGetAll(fullCommitId);
+        if (!commitData.message) {
+            return res.status(404).json({ error: 'Commit not found' });
+        }
+        
+        // Get file changes
+        const files = JSON.parse(commitData.files || '[]');
+        const fileChanges = [];
+        const changesData = await redisClient.hGet(`${fullCommitId}:changes`, 'summary');
+        const changes = changesData ? JSON.parse(changesData) : [];
+        
+        // Get actual file contents and diffs
+        for (const file of files) {
+            const currentContent = await redisClient.hGet(`${fullCommitId}:files`, file) || '';
+            let previousContent = '';
+            
+            if (commitData.parent) {
+                previousContent = await redisClient.hGet(`${commitData.parent}:files`, file) || '';
+            }
+            
+            fileChanges.push({
+                filepath: file,
+                status: previousContent ? 'modified' : 'added',
+                additions: changes.find(c => c.file === file)?.additions || 0,
+                deletions: changes.find(c => c.file === file)?.deletions || 0,
+                currentContent,
+                previousContent
+            });
+        }
+        
+        res.json({
+            ...commitData,
+            fileChanges
+        });
+    } catch (error) {
+        console.error('Get commit details error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Merge branches
+app.post('/api/projects/:projectId/git/merge', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { sourceBranch } = req.body;
+        
+        const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        
+        // Get HEAD commits of both branches
+        const sourceHead = await redisClient.hGet(`project:${projectId}:branches`, sourceBranch);
+        const targetHead = await redisClient.hGet(`project:${projectId}:branches`, currentBranch);
+        
+        if (!sourceHead) {
+            return res.status(400).json({ error: 'Source branch has no commits' });
+        }
+        
+        // For simplicity, we'll do a fast-forward merge
+        // In a real implementation, you'd handle conflicts
+        
+        // Get all files from source branch's HEAD
+        const sourceFiles = await redisClient.hGetAll(`${sourceHead}:files`);
+        
+        // Apply changes to current branch
+        for (const [filepath, content] of Object.entries(sourceFiles)) {
+            await redisClient.hSet(`project:${projectId}:file:${filepath}`, 'content', content);
+        }
+        
+        // Create merge commit
+        const mergeCommitId = `commit:${projectId}:${Date.now()}`;
+        await redisClient.hSet(mergeCommitId, {
+            message: `Merge branch '${sourceBranch}' into ${currentBranch}`,
+            author: 'User',
+            timestamp: new Date().toISOString(),
+            branch: currentBranch,
+            parent: targetHead || null,
+            mergeFrom: sourceHead,
+            files: JSON.stringify(Object.keys(sourceFiles))
+        });
+        
+        // Update branch
+        await redisClient.lPush(`project:${projectId}:branch:${currentBranch}:commits`, mergeCommitId);
+        await redisClient.hSet(`project:${projectId}:branches`, currentBranch, mergeCommitId);
+        
+        res.json({ success: true, mergeCommit: mergeCommitId });
+    } catch (error) {
+        console.error('Merge error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -693,25 +1017,62 @@ app.get('/api/projects/:projectId/git/log', async (req, res) => {
     try {
         const { projectId } = req.params;
         
-        // Get commit IDs
-        const commitIds = await redisClient.lRange(`project:${projectId}:commits`, 0, 9);
+        // Get current branch
+        const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
+        
+        // Get commit IDs from the current branch
+        const commitIds = await redisClient.lRange(`project:${projectId}:branch:${currentBranch}:commits`, 0, 9);
+        
+        console.log(`Fetching commits for branch ${currentBranch}:`, commitIds);
         
         const commits = [];
         for (const commitId of commitIds) {
             const commitData = await redisClient.hGetAll(commitId);
-            if (commitData.message) {
+            console.log('Commit data:', commitId, commitData);
+            
+            if (commitData && commitData.message) {
                 commits.push({
                     hash: commitId.split(':').pop().substring(0, 7),
+                    fullHash: commitId,
                     message: commitData.message,
-                    author: commitData.author,
-                    timestamp: commitData.timestamp
+                    author: commitData.author || 'Unknown',
+                    timestamp: commitData.timestamp || new Date().toISOString(),
+                    branch: commitData.branch || currentBranch
                 });
             }
         }
         
-        res.json({ commits });
+        res.json({ 
+            commits, 
+            branch: currentBranch,
+            total: commits.length 
+        });
     } catch (error) {
         console.error('Git log error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add this debug endpoint to your backend
+app.get('/api/projects/:projectId/git/debug', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        const gitData = await redisClient.hGetAll(`project:${projectId}:git`);
+        const branches = await redisClient.hGetAll(`project:${projectId}:branches`);
+        const currentBranch = gitData.currentBranch || 'main';
+        const mainCommits = await redisClient.lRange(`project:${projectId}:branch:main:commits`, 0, -1);
+        const stagedFiles = await redisClient.hGetAll(`project:${projectId}:git:staged`);
+        
+        res.json({
+            gitData,
+            branches,
+            currentBranch,
+            mainCommits,
+            stagedFiles,
+            commitCount: mainCommits.length
+        });
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
