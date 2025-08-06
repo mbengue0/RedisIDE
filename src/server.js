@@ -47,6 +47,66 @@ let redisClient;
 const sessions = new Map();
 const activeUsers = new Map();
 
+// Add this function at the top level of your server.js file
+function createSimpleDiff(oldContent, newContent) {
+    const oldLines = (oldContent || '').split('\n');
+    const newLines = (newContent || '').split('\n');
+    const diff = [];
+    
+    // Create maps for better comparison
+    let oldIndex = 0;
+    let newIndex = 0;
+    
+    while (oldIndex < oldLines.length || newIndex < newLines.length) {
+        const oldLine = oldIndex < oldLines.length ? oldLines[oldIndex] : null;
+        const newLine = newIndex < newLines.length ? newLines[newIndex] : null;
+        
+        if (oldLine === newLine) {
+            // Lines match
+            diff.push({
+                type: 'unchanged',
+                content: oldLine,
+                oldLineNumber: oldIndex + 1,
+                newLineNumber: newIndex + 1
+            });
+            oldIndex++;
+            newIndex++;
+        } else if (oldLine === null) {
+            // New line added
+            diff.push({
+                type: 'added',
+                content: newLine,
+                newLineNumber: newIndex + 1
+            });
+            newIndex++;
+        } else if (newLine === null) {
+            // Line removed
+            diff.push({
+                type: 'removed',
+                content: oldLine,
+                oldLineNumber: oldIndex + 1
+            });
+            oldIndex++;
+        } else {
+            // Lines differ - for now, treat as remove + add
+            // In a real diff algorithm, we'd look for moved lines
+            diff.push({
+                type: 'removed',
+                content: oldLine,
+                oldLineNumber: oldIndex + 1
+            });
+            diff.push({
+                type: 'added',
+                content: newLine,
+                newLineNumber: newIndex + 1
+            });
+            oldIndex++;
+            newIndex++;
+        }
+    }
+    
+    return diff;
+}
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('New collaboration connection:', socket.id);
@@ -846,8 +906,9 @@ app.post('/api/projects/:projectId/git/commit', async (req, res) => {
             return res.status(400).json({ error: 'No files staged for commit' });
         }
         
-        // Create commit ID
+        // CREATE COMMIT ID HERE - BEFORE USING IT
         const commitId = `commit:${projectId}:${Date.now()}`;
+        console.log('Creating commit:', commitId);
         
         // Get parent commit
         const parentCommits = await redisClient.lRange(`project:${projectId}:branch:${currentBranch}:commits`, 0, 0);
@@ -864,17 +925,21 @@ app.post('/api/projects/:projectId/git/commit', async (req, res) => {
         
         // Save file snapshots and calculate changes
         const changes = [];
+        
+        // NOW we can use commitId in the loop
         for (const filepath of filesToCommit) {
             const content = await redisClient.hGet(`project:${projectId}:file:${filepath}`, 'content') || '';
+            console.log(`Committing ${filepath}:`, content.substring(0, 100) + '...');
             
-            // Get previous content
+            // Get previous content for comparison
             let previousContent = '';
             if (parentCommit) {
                 previousContent = await redisClient.hGet(`${parentCommit}:files`, filepath) || '';
             }
             
-            // Save current snapshot
+            // Save current snapshot with the commitId
             await redisClient.hSet(`${commitId}:files`, filepath, content);
+            console.log(`Saved snapshot for ${filepath} in commit ${commitId}`);
             
             // Calculate simple diff stats
             const currentLines = content.split('\n').length;
@@ -895,7 +960,7 @@ app.post('/api/projects/:projectId/git/commit', async (req, res) => {
         // Save changes summary
         await redisClient.hSet(`${commitId}:changes`, 'summary', JSON.stringify(changes));
         
-        // Clear staged files - delete the entire hash
+        // Clear staged files
         await redisClient.del(`project:${projectId}:git:staged`);
         
         // Add to branch's commit list
@@ -903,6 +968,8 @@ app.post('/api/projects/:projectId/git/commit', async (req, res) => {
         
         // Update branch HEAD
         await redisClient.hSet(`project:${projectId}:branches`, currentBranch, commitId);
+        
+        console.log('Commit completed successfully:', commitId);
         
         res.json({ 
             success: true,
@@ -917,45 +984,74 @@ app.post('/api/projects/:projectId/git/commit', async (req, res) => {
     }
 });
 
-// Get detailed commit info
+// Update your commit details endpoint
 app.get('/api/projects/:projectId/git/commits/:commitId/details', async (req, res) => {
     try {
         const { projectId, commitId } = req.params;
-        const fullCommitId = commitId.includes(':') ? commitId : `commit:${projectId}:${commitId}`;
+        const decodedCommitId = decodeURIComponent(commitId);
+        
+        let fullCommitId;
+        if (decodedCommitId.includes(':')) {
+            fullCommitId = decodedCommitId;
+        } else {
+            fullCommitId = `commit:${projectId}:${decodedCommitId}`;
+        }
         
         const commitData = await redisClient.hGetAll(fullCommitId);
-        if (!commitData.message) {
+        
+        if (!commitData || !commitData.message) {
             return res.status(404).json({ error: 'Commit not found' });
         }
         
-        // Get file changes
         const files = JSON.parse(commitData.files || '[]');
         const fileChanges = [];
-        const changesData = await redisClient.hGet(`${fullCommitId}:changes`, 'summary');
-        const changes = changesData ? JSON.parse(changesData) : [];
         
-        // Get actual file contents and diffs
         for (const file of files) {
             const currentContent = await redisClient.hGet(`${fullCommitId}:files`, file) || '';
             let previousContent = '';
             
-            if (commitData.parent) {
-                previousContent = await redisClient.hGet(`${commitData.parent}:files`, file) || '';
+            // Get the previous content from parent commit
+            if (commitData.parent && commitData.parent !== 'null' && commitData.parent !== '') {
+                try {
+                    const parentFiles = await redisClient.hGet(`${commitData.parent}:files`, file);
+                    if (parentFiles !== null) {
+                        previousContent = parentFiles;
+                    }
+                } catch (e) {
+                    console.log('Could not get parent content:', e);
+                }
+            } else {
+                // Check if file existed in tracked files (for first commit after init)
+                const trackedContent = await redisClient.hGet(`project:${projectId}:git:tracked`, file);
+                if (trackedContent) {
+                    previousContent = trackedContent;
+                }
             }
+            
+            // Calculate actual diff
+            const diff = createSimpleDiff(previousContent, currentContent);
+            
+            // Count actual additions and deletions from the diff
+            const additions = diff.filter(d => d.type === 'added').length;
+            const deletions = diff.filter(d => d.type === 'removed').length;
             
             fileChanges.push({
                 filepath: file,
                 status: previousContent ? 'modified' : 'added',
-                additions: changes.find(c => c.file === file)?.additions || 0,
-                deletions: changes.find(c => c.file === file)?.deletions || 0,
-                currentContent,
-                previousContent
+                additions,
+                deletions,
+                diff: diff
             });
         }
         
         res.json({
             ...commitData,
-            fileChanges
+            fileChanges,
+            stats: {
+                totalAdditions: fileChanges.reduce((sum, f) => sum + f.additions, 0),
+                totalDeletions: fileChanges.reduce((sum, f) => sum + f.deletions, 0),
+                filesChanged: fileChanges.length
+            }
         });
     } catch (error) {
         console.error('Get commit details error:', error);
@@ -1016,24 +1112,19 @@ app.post('/api/projects/:projectId/git/merge', async (req, res) => {
 app.get('/api/projects/:projectId/git/log', async (req, res) => {
     try {
         const { projectId } = req.params;
-        
-        // Get current branch
         const currentBranch = await redisClient.hGet(`project:${projectId}:git`, 'currentBranch') || 'main';
-        
-        // Get commit IDs from the current branch
         const commitIds = await redisClient.lRange(`project:${projectId}:branch:${currentBranch}:commits`, 0, 9);
         
-        console.log(`Fetching commits for branch ${currentBranch}:`, commitIds);
+        console.log('Found commit IDs:', commitIds);
         
         const commits = [];
         for (const commitId of commitIds) {
             const commitData = await redisClient.hGetAll(commitId);
-            console.log('Commit data:', commitId, commitData);
             
             if (commitData && commitData.message) {
                 commits.push({
                     hash: commitId.split(':').pop().substring(0, 7),
-                    fullHash: commitId,
+                    fullHash: commitId, // Make sure this is the full Redis key
                     message: commitData.message,
                     author: commitData.author || 'Unknown',
                     timestamp: commitData.timestamp || new Date().toISOString(),

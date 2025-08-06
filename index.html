@@ -68,6 +68,28 @@
             background-color: #1177bb;
         }
 
+        .file-header:hover {
+            background: #1c2128 !important;
+        }
+
+        .file-diff-content {
+            border-top: 1px solid #30363d;
+        }
+
+        /* Scrollbar for diff view */
+        .file-diff-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .file-diff-content::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+
+        .file-diff-content::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
         /* File change headers */
         .file-change-header {
             border-radius: 4px;
@@ -1529,6 +1551,15 @@
             color: #888;
         }
 
+        /* Diff line styling */
+        .diff-line-added {
+            background: rgba(63, 185, 80, 0.15);
+        }
+
+        .diff-line-removed {
+            background: rgba(248, 81, 73, 0.15);
+        }
+
         .view-diff-btn {
             padding: 2px 8px;
             background: #007acc;
@@ -1550,13 +1581,14 @@
             border-radius: 4px;
         }
 
+        /* GitHub-like commit styling */
         .git-commit-item {
-            cursor: pointer;
-            position: relative;
+            border-bottom: 1px solid #21262d;
+            transition: background 0.2s;
         }
 
         .git-commit-item:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(56, 139, 253, 0.05);
         }
 
         /* File name should be clickable */
@@ -1567,9 +1599,8 @@
 
         /* Commit history styling */
         .commit-main {
+            padding: 16px;
             cursor: pointer;
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
         }
 
         .commit-main:hover {
@@ -1588,9 +1619,13 @@
         }
 
         .commit-hash {
-            font-family: monospace;
-            color: var(--accent-blue);
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
             font-size: 12px;
+            color: #58a6ff;
+        }
+
+        .commit-hash:hover {
+            text-decoration: underline;
         }
 
         .commit-author {
@@ -2377,50 +2412,146 @@
             
             if (detailsDiv.style.display === 'none') {
                 detailsDiv.style.display = 'block';
-                detailsDiv.innerHTML = '<div style="padding: 10px;">Loading commit details...</div>';
+                detailsDiv.innerHTML = '<div style="padding: 20px; text-align: center;">Loading commit details...</div>';
                 
                 try {
-                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/commits/${commitHash}/details`);
-                    const details = await response.json();
+                    const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/commits/${encodeURIComponent(commitHash)}/details`);
+                    const data = await response.json();
                     
-                    let detailsHtml = '<div class="commit-detail-content">';
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to load details');
+                    }
                     
-                    // Show file changes summary
-                    detailsHtml += '<div class="commit-stats" style="padding: 10px; background: #2d2d30; margin-bottom: 10px; border-radius: 4px;">';
-                    const totalAdditions = details.fileChanges.reduce((sum, f) => sum + f.additions, 0);
-                    const totalDeletions = details.fileChanges.reduce((sum, f) => sum + f.deletions, 0);
-                    detailsHtml += `<span style="color: #4ec9b0;">+${totalAdditions}</span> <span style="color: #f48771;">-${totalDeletions}</span> in ${details.fileChanges.length} files`;
-                    detailsHtml += '</div>';
+                    let html = '<div style="padding: 15px; background: #0d1117; border-radius: 6px; margin: 10px;">';
                     
-                    // Show each file's changes
-                    for (const change of details.fileChanges) {
-                        detailsHtml += `
-                            <div class="file-change-item" style="margin-bottom: 15px;">
-                                <div class="file-change-header" style="padding: 5px 10px; background: #2d2d30; cursor: pointer;" 
-                                    onclick="toggleFileDiff('${commitHash}', '${change.filepath}', ${index})">
-                                    <span class="file-status ${change.status}">${change.status === 'added' ? '➕' : '📝'}</span>
-                                    <span>${change.filepath}</span>
-                                    <span style="float: right;">
-                                        <span style="color: #4ec9b0;">+${change.additions}</span>
-                                        <span style="color: #f48771;">-${change.deletions}</span>
-                                    </span>
+                    // Stats summary
+                    html += `
+                        <div style="padding: 10px; background: #161b22; border-radius: 4px; margin-bottom: 10px;">
+                            <strong>${data.stats.filesChanged}</strong> file(s) changed, 
+                            <span style="color: #3fb950;">+${data.stats.totalAdditions}</span> additions, 
+                            <span style="color: #f85149;">-${data.stats.totalDeletions}</span> deletions
+                        </div>
+                    `;
+                    
+                    // Show each file with expandable diff
+                    data.fileChanges.forEach((file, fileIndex) => {
+                        html += `
+                            <div style="margin: 10px 0; background: #161b22; border-radius: 4px; overflow: hidden;">
+                                <div style="padding: 10px; cursor: pointer; border-bottom: 1px solid #30363d;" 
+                                    onclick="toggleFileDiff('${index}-${fileIndex}')">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #58a6ff; font-family: monospace;">${file.filepath}</span>
+                                        <span style="font-size: 12px;">
+                                            <span style="color: #3fb950;">+${file.additions}</span>
+                                            <span style="color: #f85149; margin-left: 10px;">-${file.deletions}</span>
+                                        </span>
+                                    </div>
                                 </div>
-                                <div id="diff-${commitHash}-${change.filepath.replace(/[/.]/g, '-')}" class="file-diff" style="display: none;">
-                                    <!-- Diff will be shown here -->
+                                <div id="file-diff-${index}-${fileIndex}" style="display: none; max-height: 300px; overflow-y: auto;">
+                                    ${renderDiff(file.diff.slice(0, 50))} <!-- Show first 50 lines -->
                                 </div>
                             </div>
                         `;
-                    }
+                    });
                     
-                    detailsHtml += '</div>';
-                    detailsDiv.innerHTML = detailsHtml;
+                    html += '</div>';
+                    detailsDiv.innerHTML = html;
                     
                 } catch (error) {
                     console.error('Error loading commit details:', error);
-                    detailsDiv.innerHTML = '<div style="padding: 10px; color: #f48771;">Error loading details</div>';
+                    detailsDiv.innerHTML = `<div style="padding: 20px; color: #f85149;">Error: ${error.message}</div>`;
                 }
             } else {
                 detailsDiv.style.display = 'none';
+            }
+        }
+
+        function toggleFileDiff(id) {
+            const diffDiv = document.getElementById(`file-diff-${id}`);
+            if (diffDiv) {
+                diffDiv.style.display = diffDiv.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function renderDiff(diff) {
+            if (!diff || diff.length === 0) {
+                return '<div style="padding: 10px; color: #8b949e;">No changes in preview</div>';
+            }
+            
+            let html = '<div style="font-family: monospace; font-size: 12px; background: #0d1117; padding: 10px;">';
+            
+            diff.forEach(line => {
+                const bgColor = {
+                    'added': 'rgba(63, 185, 80, 0.15)',
+                    'removed': 'rgba(248, 81, 73, 0.15)',
+                    'unchanged': 'transparent'
+                }[line.type];
+                
+                const textColor = {
+                    'added': '#3fb950',
+                    'removed': '#f85149',
+                    'unchanged': '#8b949e'
+                }[line.type];
+                
+                const symbol = {
+                    'added': '+',
+                    'removed': '-',
+                    'unchanged': ' '
+                }[line.type];
+                
+                html += `
+                    <div style="background: ${bgColor}; color: ${textColor}; padding: 2px 5px; white-space: pre-wrap;">
+                        <span style="width: 20px; display: inline-block;">${symbol}</span>${escapeHtml(line.content || '')}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+
+        function renderDiffLine(line) {
+            const bgColor = {
+                'added': '#1a3b22',
+                'removed': '#3d1e1e',
+                'unchanged': 'transparent'
+            }[line.type];
+            
+            const textColor = {
+                'added': '#3fb950',
+                'removed': '#f85149',
+                'unchanged': '#8b949e'
+            }[line.type];
+            
+            const symbol = {
+                'added': '+',
+                'removed': '-',
+                'unchanged': ' '
+            }[line.type];
+            
+            const lineNumbers = `<span style="color: #484f58; width: 80px; display: inline-block; text-align: right; padding-right: 16px; user-select: none;">`;
+            
+            if (line.type === 'unchanged') {
+                lineNumbers + `${line.oldLineNumber || ''}  ${line.newLineNumber || ''}`;
+            } else if (line.type === 'removed') {
+                lineNumbers + `${line.oldLineNumber || ''}  `;
+            } else {
+                lineNumbers + `  ${line.newLineNumber || ''}`;
+            }
+            
+            return `
+                <div style="background: ${bgColor}; color: ${textColor}; padding: 1px 0; display: flex;">
+                    ${lineNumbers}</span>
+                    <span style="width: 20px; text-align: center;">${symbol}</span>
+                    <span style="flex: 1; white-space: pre-wrap;">${escapeHtml(line.content)}</span>
+                </div>
+            `;
+        }
+
+        function toggleFileDiff(diffId) {
+            const diffDiv = document.getElementById(`diff-${diffId}`);
+            if (diffDiv) {
+                diffDiv.style.display = diffDiv.style.display === 'none' ? 'block' : 'none';
             }
         }
 
@@ -2764,6 +2895,65 @@
             }
         }
 
+        // Add this utility function for creating diffs
+        function createDiff(oldContent, newContent) {
+        const oldLines = oldContent.split('\n');
+        const newLines = newContent.split('\n');
+        
+        const diff = [];
+        let oldIndex = 0;
+        let newIndex = 0;
+        
+        // Simple diff algorithm - you can use a library like 'diff' for better results
+        const maxLength = Math.max(oldLines.length, newLines.length);
+        
+        for (let i = 0; i < maxLength; i++) {
+            const oldLine = oldLines[i];
+            const newLine = newLines[i];
+            
+            if (oldLine === newLine) {
+            diff.push({
+                type: 'unchanged',
+                content: oldLine || '',
+                oldLineNumber: oldIndex + 1,
+                newLineNumber: newIndex + 1
+            });
+            oldIndex++;
+            newIndex++;
+            } else if (oldLine === undefined) {
+            diff.push({
+                type: 'added',
+                content: newLine,
+                newLineNumber: newIndex + 1
+            });
+            newIndex++;
+            } else if (newLine === undefined) {
+            diff.push({
+                type: 'removed',
+                content: oldLine,
+                oldLineNumber: oldIndex + 1
+            });
+            oldIndex++;
+            } else {
+            diff.push({
+                type: 'removed',
+                content: oldLine,
+                oldLineNumber: oldIndex + 1
+            });
+            diff.push({
+                type: 'added',
+                content: newLine,
+                newLineNumber: newIndex + 1
+            });
+            oldIndex++;
+            newIndex++;
+            }
+        }
+        
+        return diff;
+        }
+
+
         // Enhanced commit functionality
         async function performCommit() {
             const messageInput = document.getElementById('commitMessage');
@@ -2817,21 +3007,16 @@
             }
         }
 
-        // Enhanced Commit History with Full Details
+        // Enhanced commit display with expandable diffs
         async function loadGitHistory() {
             if (!currentProject) return;
-            
-            console.log('Loading git history...');
             
             try {
                 const response = await fetch(`${API_URL}/projects/${currentProject.id}/git/log`);
                 const data = await response.json();
                 
-                console.log('Git log response:', data);
-                
                 const commitList = document.getElementById('gitCommitList');
                 
-                // Show branch info
                 let html = `
                     <div style="padding: 10px; border-bottom: 1px solid #3e3e42; color: #888;">
                         Branch: <span style="color: #4ec9b0; font-weight: bold;">${data.branch || 'main'}</span>
@@ -2840,31 +3025,29 @@
                 
                 if (data.commits && data.commits.length > 0) {
                     html += data.commits.map((commit, index) => `
-                        <div class="git-commit-item" onclick="toggleCommitDetails('${commit.fullHash || commit.hash}', ${index})">
-                            <div class="commit-main">
+                        <div class="git-commit-item">
+                            <div class="commit-main" onclick="toggleCommitDetails('${commit.fullHash || commit.hash}', ${index})">
                                 <div class="commit-header">
-                                    <span class="commit-hash" style="font-family: monospace; color: #007acc;">${commit.hash}</span>
-                                    <span class="commit-author" style="color: #969696;">${commit.author}</span>
+                                    <span class="commit-hash" style="font-family: monospace; color: #58a6ff;">${commit.hash}</span>
+                                    <span class="commit-author" style="color: #8b949e;">${commit.author}</span>
                                 </div>
-                                <div class="commit-message" style="margin: 5px 0; color: #cccccc;">${commit.message}</div>
-                                <div class="commit-time" style="font-size: 12px; color: #969696;">
+                                <div class="commit-message" style="margin: 5px 0; color: #f0f6fc; font-weight: 500;">${commit.message}</div>
+                                <div class="commit-time" style="font-size: 12px; color: #8b949e;">
                                     ${new Date(commit.timestamp).toLocaleString()}
                                 </div>
                             </div>
                             <div id="commit-details-${index}" class="commit-details" style="display: none;">
-                                <!-- Details will be loaded here when clicked -->
+                                <div class="loading-spinner" style="text-align: center; padding: 20px;">Loading...</div>
                             </div>
                         </div>
                     `).join('');
                 } else {
-                    html += '<div style="text-align: center; padding: 40px; color: #888;">No commits yet</div>';
+                    html += '<div style="text-align: center; padding: 40px; color: #8b949e;">No commits yet</div>';
                 }
                 
                 commitList.innerHTML = html;
             } catch (error) {
                 console.error('Git log error:', error);
-                document.getElementById('gitCommitList').innerHTML = 
-                    '<div style="text-align: center; padding: 20px; color: #f48771;">Error loading commits</div>';
             }
         }
 
