@@ -11,7 +11,7 @@ A complete web-based Integrated Development Environment (IDE) built entirely on 
 
 ## 🌐 Live Demo
 
-[Try Redis IDE Live](rediside-production.up.railway.app)
+[Try Redis IDE Live](https://rediside-production.up.railway.app/?session=collab-1pi4o56bb)
 
 ## 🎥 Demo Video
 
@@ -122,7 +122,7 @@ project:projectId -> {
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/mbengue0/redis-ide.git
+git clone https://github.com/mbengue0/RedisIDE.git
 cd redis-ide
 ```
 
