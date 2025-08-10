@@ -8,7 +8,7 @@ const { connectRedis, getClient } = require('./redisClient');
 const projectManager = require('./projectManager');
 const searchManager = require('./searchManager');
 const { exec } = require('child_process');
-const util = require('util');
+const util = require('util'); 
 const execPromise = util.promisify(exec);
 
 // Create Express app FIRST
@@ -1059,6 +1059,70 @@ app.get('/api/projects/:projectId/git/commits/:commitId/details', async (req, re
     }
 });
 
+// AI Analysis Endpoint - Backend handles the API key
+app.post('/api/ai/analyze', async (req, res) => {
+    try {
+        const { code, question } = req.body;
+        
+        const GROQ_API_KEY = process.env.GROQ_API_KEY;
+        
+        if (!GROQ_API_KEY) {
+            console.error('GROQ_API_KEY not configured in environment variables');
+            return res.status(500).json({ 
+                error: 'AI service not configured. Please contact administrator.' 
+            });
+        }
+        
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${GROQ_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'llama3-8b-8192',  // UPDATED MODEL
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a helpful coding assistant. Analyze code, find bugs, suggest improvements, and answer programming questions.'
+                    },
+                    {
+                        role: 'user',
+                        content: question || `Please analyze this code and provide insights:\n\n${code}`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 2048
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('Groq API error:', error);
+            return res.status(500).json({ error: 'AI service error' });
+        }
+        
+        const data = await response.json();
+        res.json({ 
+            response: data.choices[0].message.content 
+        });
+        
+    } catch (error) {
+        console.error('AI analysis error:', error);
+        res.status(500).json({ 
+            error: 'Failed to analyze code. Please try again.' 
+        });
+    }
+});
+
+// Also add a check endpoint
+app.get('/api/ai/status', (req, res) => {
+    const configured = !!process.env.GROQ_API_KEY;
+    res.json({ 
+        configured,
+        message: configured ? 'AI service is ready' : 'AI service not configured'
+    });
+});
 // Merge branches
 app.post('/api/projects/:projectId/git/merge', async (req, res) => {
     try {
